@@ -1,3 +1,5 @@
 env/
 **config.ini
 archive/
+logs/
+**__pycache__/

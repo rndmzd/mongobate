@@ -1,7 +1,11 @@
 import logging
+import queue
+import threading
+
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-import threading
+
+from mongobate.cbevents import CBEvents
 
 logger = logging.getLogger()
 # logging.basicConfig(level=logging.INFO)
@@ -14,17 +18,33 @@ class EventHandler:
             mongo_port,
             mongo_db,
             mongo_collection):
+        self.event_queue = queue.Queue()
+        self._stop_event = threading.Event()
+
+        self.cb_events = CBEvents()
+        
         try:
             self.mongo_client = MongoClient(host=mongo_host, port=mongo_port)
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
-            self._stop_event = threading.Event()
         except ConnectionFailure as e:
             print("Could not connect to MongoDB:", e)
             raise
 
-    def process_event(self, event):
-        print("Processing event:", event)
+    def event_processor(self):
+        """
+        Continuously process events from the event queue.
+        """
+        while not self.stop_event.is_set():
+            try:
+                event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
+                process_result = self.cb_events.process_event(event)
+                logger.debug(f"process_result: {process_result}")
+                self.event_queue.task_done()
+            except queue.Empty:
+                continue  # Resume loop if no event and check for stop signal
+            except Exception as e:
+                logger.exception("Error in event processor", exc_info=e)
 
     def watch_changes(self):
         try:
@@ -35,7 +55,7 @@ class EventHandler:
                         continue
                     if change["operationType"] == "insert":
                         doc = change["fullDocument"]
-                        self.process_event(doc)
+                        self.event_queue.put(doc)
         except Exception as e:
             logger.exception("An error occurred while watching changes: %s", e)
         finally:
@@ -43,22 +63,36 @@ class EventHandler:
                 self.cleanup()
 
     def run(self):
+        logger.info("Starting change stream watcher thread...")
         self.watcher_thread = threading.Thread(
             target=self.watch_changes, args=(), daemon=True
         )
         self.watcher_thread.start()
 
+        logger.info("Starting event processing thread...")
+        self.event_thread = threading.Thread(
+            target=self.process_event, args=(), daemon=True
+        )
+        self.event_thread.start()
+
     def stop(self):
+        logger.debug("Setting stop event.")
         self._stop_event.set()
         if self.watcher_thread.is_alive():
+            logger.debug("Joining watcher thread.")
             self.watcher_thread.join()
+        if self.event_thread.is_alive():
+            logger.debug("Joining event thread.")
+            self.event_thread.join()
+        logger.debug("Checking if MongoDB connection still active.")
         self.cleanup()
 
     def cleanup(self):
         if self.mongo_client:
+            logger.info("Closing MongoDB connection...")
             self.mongo_client.close()
-            logger.info("MongoDB connection closed.")
-
+        
+        logger.info("Clean-up complete.")
 
 if __name__ == "__main__":
     import configparser
@@ -80,7 +114,7 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logger.info('KeyboardInterrupt received. Stopping watcher...')
+        logger.info('KeyboardInterrupt received. Stopping threads...')
     finally:
         watcher.stop()
         logger.info("Done.")

@@ -5,6 +5,8 @@ import os
 import sys
 import time
 
+from multiprocessing import Event, Process
+
 #from dbhandler.dbhandler import DBHandler
 #from mongobate.eventhandler import EventHandler
 
@@ -57,11 +59,17 @@ if __name__ == '__main__':
         mongo_host, mongo_port, mongo_db, mongo_collection,
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute)
-
+    
+    _stop_event = Event()
     event_handler = EventHandler(
-        mongo_host, mongo_port, mongo_db, mongo_collection)
+        mongo_host, mongo_port, mongo_db, mongo_collection, _stop_event)
 
-    db_handler.run()
+    # db_handler.run()
+    # event_handler.run()
+
+    db_process = Process(target=db_handler.run, args=())
+    db_process.start()
+
     event_handler.run()
 
     try:
@@ -72,7 +80,8 @@ if __name__ == '__main__':
         print('DEBUG 1')
         db_handler.stop()
         print('DEBUG 2')
-        event_handler.stop()
+        # event_handler.stop()
+        _stop_event.set()
         print('DEBUG 3')
     finally:
         logger.info("Application has shut down.")

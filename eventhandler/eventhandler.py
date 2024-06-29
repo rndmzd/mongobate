@@ -17,9 +17,11 @@ class EventHandler:
             mongo_host,
             mongo_port,
             mongo_db,
-            mongo_collection):
+            mongo_collection,
+            _stop_event=threading.Event()):
         self.event_queue = queue.Queue()
-        self._stop_event = threading.Event()
+        #self._stop_event = threading.Event()
+        self._stop_event = _stop_event
 
         self.cb_events = CBEvents()
         
@@ -101,12 +103,12 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read("config.ini")
 
-    watcher = EventHandler(
+    event_handler = EventHandler(
         mongo_host=config.get('MongoDB', 'host'),
         mongo_port=config.getint('MongoDB', 'port'),
         mongo_db=config.get('MongoDB', 'db'),
         mongo_collection=config.get('MongoDB', 'collection'))
-    watcher.run()
+    event_handler.run()
 
     print("Watching for changes. Press Ctrl+C to stop...")
 
@@ -116,5 +118,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info('KeyboardInterrupt received. Stopping threads...')
     finally:
-        watcher.stop()
+        event_handler.stop()
         logger.info("Done.")

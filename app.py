@@ -55,20 +55,24 @@ if __name__ == '__main__':
     mongo_db = config.get("MongoDB", "db")
     mongo_collection = config.get("MongoDB", "collection")
 
+    logger.debug('Initializing database handler.')
     db_handler = DBHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection,
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute)
     
+    logger.debug('Initializing event handler.')
     event_handler = EventHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection)
 
     # db_handler.run()
     # event_handler.run()
 
+    logger.debug('Spawning process for database handler.')
     db_process = Process(target=db_handler.run, args=())
     db_process.start()
 
+    logger.debug('Calling event handler start.')
     event_handler.run()
 
     try:

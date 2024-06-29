@@ -25,7 +25,7 @@ log_backup_count = config.getint("Logging", "log_backup_count")
 if not os.path.exists(os.path.dirname(log_file)):
     os.makedirs(os.path.dirname(log_file))
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 stream_handler = logging.StreamHandler()

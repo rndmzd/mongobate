@@ -7,7 +7,7 @@ from pymongo.errors import ConnectionFailure
 
 from eventhandler.cbevents import CBEvents
 
-logger = logging.getLogger()
+logger = logging.getLogger('mongobate.eventhandler.eventhandler')
 logger.setLevel(logging.DEBUG)
 
 

@@ -1,7 +1,7 @@
 import logging
 import simplejson as json
 
-logger = logging.getLogger()
+logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)
 
 

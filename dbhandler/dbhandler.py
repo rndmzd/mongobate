@@ -9,7 +9,7 @@ from requests.exceptions import RequestException
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-logger = logging.getLogger()
+logger = logging.getLogger('mongobate.dbhandler.dbhandler')
 logger.setLevel(logging.DEBUG)
 
 

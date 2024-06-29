@@ -3,6 +3,7 @@ import logging
 import simplejson as json
 
 from eventhandler import Actions
+from eventhandler import Checks
 
 logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)
@@ -18,6 +19,7 @@ class MongoJSONEncoder(json.JSONEncoder):
 class CBEvents:
     def __init__(self):
         self.actions = Actions()
+        self.checks = Checks()
 
     def process_event(self, event):
         try:
@@ -84,6 +86,22 @@ class CBEvents:
         try:
             logger.info("Tip event received.")
             # Process tip event
+            if not self.checks.is_song_request(event["tip"]["tokens"]):
+                return False
+            request_count = self.checks.get_request_count(event["tip"]["tokens"])
+            logger.info(f"Song request detected. Request count: {request_count}")
+            song_extracts = self.actions.get_song_titles(event["tip"]["message"], request_count)
+            logger.debug(f'song_extracts:  {song_extracts}')
+            for song_info in song_extracts:
+                song_uri = self.actions.find_song_spotify(song_info["artist"], song_info["song"])
+                logger.debug(f'song_uri: {song_uri}')
+                if song_uri:
+                    add_queue_result = self.actions.add_song_to_queue(song_uri)
+                    logger.debug(f'add_queue_result: {add_queue_result}')
+                    if not add_queue_result:
+                        logger.error(f"Failed to add song to queue: {song_info}")
+                    else:
+                        logger.info(f"Song added to queue: {song_info}")
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False

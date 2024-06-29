@@ -60,9 +60,8 @@ if __name__ == '__main__':
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute)
     
-    _stop_event = Event()
     event_handler = EventHandler(
-        mongo_host, mongo_port, mongo_db, mongo_collection, _stop_event)
+        mongo_host, mongo_port, mongo_db, mongo_collection)
 
     # db_handler.run()
     # event_handler.run()
@@ -80,8 +79,6 @@ if __name__ == '__main__':
         print('DEBUG 1')
         db_handler.stop()
         print('DEBUG 2')
-        # event_handler.stop()
-        # _stop_event.set()
         event_handler.stop()
         print('DEBUG 3')
     finally:

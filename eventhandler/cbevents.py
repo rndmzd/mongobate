@@ -45,7 +45,7 @@ class CBEvents:
         
         return process_result
 
-    def tip(self):
+    def tip(self, event):
         try:
             logger.info("Tip event received.")
             # Process tip event
@@ -54,7 +54,7 @@ class CBEvents:
             return False
         return True
     
-    def user_enter(self):
+    def user_enter(self, event):
         try:
             logger.info("User enter event received.")
             # Process user enter event
@@ -63,7 +63,7 @@ class CBEvents:
             return False
         return True
     
-    def user_leave(self):
+    def user_leave(self, event):
         try:
             logger.info("User leave event received.")
             # Process user leave event
@@ -72,7 +72,7 @@ class CBEvents:
             return False
         return True
     
-    def follow(self):
+    def follow(self, event):
         try:
             logger.info("Follow event received.")
             # Process follow event
@@ -81,7 +81,7 @@ class CBEvents:
             return False
         return True
 
-    def unfollow(self):
+    def unfollow(self, event):
         try:
             logger.info("Unfollow event received.")
             # Process unfollow event
@@ -90,7 +90,7 @@ class CBEvents:
             return False
         return True
 
-    def media_purchase(self):
+    def media_purchase(self, event):
         try:
             logger.info("Media purchase event received.")
             # Process media purchase event
@@ -99,7 +99,7 @@ class CBEvents:
             return False
         return True
 
-    def chat_message(self):
+    def chat_message(self, event):
         try:
             logger.info("Chat message event received.")
             # Process chat message event
@@ -108,7 +108,7 @@ class CBEvents:
             return False
         return True
     
-    def broadcast(self):
+    def broadcast(self, event):
         try:
             logger.info("Broadcast event received.")
             # Process broadcast event

@@ -9,9 +9,8 @@ from requests.exceptions import RequestException
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-logger = logging.getLogger()
-# logging.basicConfig()
-# logger.setLevel(logging.DEBUG)
+logger = logging.getLogger('mongobate.dbhandler.dbhandler')
+logger.setLevel(logging.DEBUG)
 
 
 class DBHandler:
@@ -23,18 +22,27 @@ class DBHandler:
             mongo_collection,
             events_api_url,
             requests_per_minute=1000):
+        self.mongo_host = mongo_host
+        self.mongo_port = mongo_port
+        self.mongo_db_name = mongo_db
+        self.mongo_collection_name = mongo_collection
         self.events_api_url = events_api_url
         self.interval = 60 / (requests_per_minute / 10)
 
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()
 
+        self.mongo_client = None
+        self.mongo_db = None
+        self.event_collection = None
+
+    def connect_to_mongodb(self):
         try:
-            self.mongo_client = MongoClient(host=mongo_host, port=mongo_port)
-            self.mongo_db = self.mongo_client[mongo_db]
-            self.event_collection = self.mongo_db[mongo_collection]
+            self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port)
+            self.mongo_db = self.mongo_client[self.mongo_db_name]
+            self.event_collection = self.mongo_db[self.mongo_collection_name]
         except ConnectionFailure as e:
-            print("Could not connect to MongoDB:", e)
+            logger.error(f"Could not connect to MongoDB: {e}")
             raise
 
     def archive_event(self, event):
@@ -82,6 +90,8 @@ class DBHandler:
             time.sleep(self.interval)
 
     def run(self):
+        self.connect_to_mongodb()
+
         processor_thread = threading.Thread(
             target=self.event_processor, args=(), daemon=True
         )

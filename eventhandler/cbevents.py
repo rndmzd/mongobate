@@ -1,7 +1,16 @@
+from bson import ObjectId
 import logging
 import simplejson as json
 
-logger = logging.getLogger()
+logger = logging.getLogger('mongobate.eventhandler.cbevents')
+logger.setLevel(logging.DEBUG)
+
+
+class MongoJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        return super().default(obj)
 
 
 class CBEvents:
@@ -10,7 +19,11 @@ class CBEvents:
 
     def process_event(self, event):
         try:
-            logger.info(json.dumps(event, sort_keys=True, indent=4))
+            try:
+                print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
+            except Exception as e:
+                logger.exception(e)
+                pp.pprint(event)
 
             event_method = event["method"]
             logger.debug(f"event_method: {event_method}")
@@ -19,6 +32,10 @@ class CBEvents:
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
+            elif event_method == "userEnter":
+                process_result = self.user_enter(event_object)
+            elif event_method == "userLeave":
+                process_result = self.user_leave(event_object)
             elif event_method == "follow":
                 process_result = self.follow(event_object)
             elif event_method == "unfollow":
@@ -39,7 +56,7 @@ class CBEvents:
         
         return process_result
 
-    def tip(self):
+    def tip(self, event):
         try:
             logger.info("Tip event received.")
             # Process tip event
@@ -48,7 +65,25 @@ class CBEvents:
             return False
         return True
     
-    def follow(self):
+    def user_enter(self, event):
+        try:
+            logger.info("User enter event received.")
+            # Process user enter event
+        except Exception as e:
+            logger.exception("Error processing user enter event", exc_info=e)
+            return False
+        return True
+    
+    def user_leave(self, event):
+        try:
+            logger.info("User leave event received.")
+            # Process user leave event
+        except Exception as e:
+            logger.exception("Error processing user leave event", exc_info=e)
+            return False
+        return True
+    
+    def follow(self, event):
         try:
             logger.info("Follow event received.")
             # Process follow event
@@ -57,7 +92,7 @@ class CBEvents:
             return False
         return True
 
-    def unfollow(self):
+    def unfollow(self, event):
         try:
             logger.info("Unfollow event received.")
             # Process unfollow event
@@ -66,7 +101,7 @@ class CBEvents:
             return False
         return True
 
-    def media_purchase(self):
+    def media_purchase(self, event):
         try:
             logger.info("Media purchase event received.")
             # Process media purchase event
@@ -75,7 +110,7 @@ class CBEvents:
             return False
         return True
 
-    def chat_message(self):
+    def chat_message(self, event):
         try:
             logger.info("Chat message event received.")
             # Process chat message event
@@ -84,7 +119,7 @@ class CBEvents:
             return False
         return True
     
-    def broadcast(self):
+    def broadcast(self, event):
         try:
             logger.info("Broadcast event received.")
             # Process broadcast event

@@ -5,8 +5,13 @@ import os
 import sys
 import time
 
-from mongobate.dbhandler import DBHandler
-from mongobate.eventhandler import EventHandler
+from multiprocessing import Event, Process
+
+#from dbhandler.dbhandler import DBHandler
+#from mongobate.eventhandler import EventHandler
+
+from dbhandler import DBHandler
+from eventhandler import EventHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -20,7 +25,7 @@ log_backup_count = config.getint("Logging", "log_backup_count")
 if not os.path.exists(os.path.dirname(log_file)):
     os.makedirs(os.path.dirname(log_file))
 
-logger = logging.getLogger()
+logger = logging.getLogger('mongobate')
 logger.setLevel(logging.DEBUG)
 
 stream_handler = logging.StreamHandler()
@@ -36,8 +41,6 @@ formatter = logging.Formatter(
 stream_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
 
-stream_handler.setLevel(logging.DEBUG)
-
 logger.addHandler(stream_handler)
 logger.addHandler(file_handler)
 
@@ -52,15 +55,24 @@ if __name__ == '__main__':
     mongo_db = config.get("MongoDB", "db")
     mongo_collection = config.get("MongoDB", "collection")
 
+    logger.debug('Initializing database handler.')
     db_handler = DBHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection,
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute)
-
+    
+    logger.debug('Initializing event handler.')
     event_handler = EventHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection)
 
-    db_handler.run()
+    # db_handler.run()
+    # event_handler.run()
+
+    logger.debug('Spawning process for database handler.')
+    db_process = Process(target=db_handler.run, args=())
+    db_process.start()
+
+    logger.debug('Calling event handler start.')
     event_handler.run()
 
     try:

@@ -5,10 +5,10 @@ import threading
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-from mongobate.cbevents import CBEvents
+from eventhandler.cbevents import CBEvents
 
-logger = logging.getLogger()
-# logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('mongobate.eventhandler.eventhandler')
+logger.setLevel(logging.DEBUG)
 
 
 class EventHandler:
@@ -35,7 +35,7 @@ class EventHandler:
         """
         Continuously process events from the event queue.
         """
-        while not self.stop_event.is_set():
+        while not self._stop_event.is_set():
             try:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
                 process_result = self.cb_events.process_event(event)
@@ -71,7 +71,7 @@ class EventHandler:
 
         logger.info("Starting event processing thread...")
         self.event_thread = threading.Thread(
-            target=self.process_event, args=(), daemon=True
+            target=self.event_processor, args=(), daemon=True
         )
         self.event_thread.start()
 
@@ -101,12 +101,12 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read("config.ini")
 
-    watcher = EventHandler(
+    event_handler = EventHandler(
         mongo_host=config.get('MongoDB', 'host'),
         mongo_port=config.getint('MongoDB', 'port'),
         mongo_db=config.get('MongoDB', 'db'),
         mongo_collection=config.get('MongoDB', 'collection'))
-    watcher.run()
+    event_handler.run()
 
     print("Watching for changes. Press Ctrl+C to stop...")
 
@@ -116,5 +116,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info('KeyboardInterrupt received. Stopping threads...')
     finally:
-        watcher.stop()
+        event_handler.stop()
         logger.info("Done.")

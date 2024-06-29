@@ -93,7 +93,7 @@ class CBEvents:
             song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
             logger.debug(f'song_extracts:  {song_extracts}')
             for song_info in song_extracts:
-                song_uri = self.actions.find_song_spotify(song_info["artist"], song_info["song"])
+                song_uri = self.actions.find_song_spotify(song_info)
                 logger.debug(f'song_uri: {song_uri}')
                 if song_uri:
                     add_queue_result = self.actions.add_song_to_queue(song_uri)

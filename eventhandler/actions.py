@@ -21,8 +21,8 @@ class Actions:
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)
     
-    def find_song_spotify(self, artist, title):
-        tracks = self.auto_dj.find_song(artist, title)
+    def find_song_spotify(self, song_info):
+        tracks = self.auto_dj.find_song(song_info)
         logger.debug(f'tracks: {tracks}')
         if tracks:
             return tracks[0]['uri']

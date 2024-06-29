@@ -35,7 +35,7 @@ class EventHandler:
         """
         Continuously process events from the event queue.
         """
-        while not self.stop_event.is_set():
+        while not self._stop_event.is_set():
             try:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
                 process_result = self.cb_events.process_event(event)

@@ -16,6 +16,8 @@ class EventHandler:
             mongo_port,
             mongo_db,
             mongo_collection):
+        from .cbevents import CBEvents
+        
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()
 

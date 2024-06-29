@@ -1,11 +1,16 @@
+from bson import ObjectId
 import logging
 import simplejson as json
-from pprint import PrettyPrinter
-
-pp = PrettyPrinter(indent=4)
 
 logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)
+
+
+class MongoJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        return super().default(obj)
 
 
 class CBEvents:
@@ -15,7 +20,7 @@ class CBEvents:
     def process_event(self, event):
         try:
             try:
-                print(json.dumps(event, sort_keys=True, indent=4))
+                print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
             except Exception as e:
                 logger.exception(e)
                 pp.pprint(event)

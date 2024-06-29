@@ -90,7 +90,7 @@ class CBEvents:
                 return False
             request_count = self.checks.get_request_count(event["tip"]["tokens"])
             logger.info(f"Song request detected. Request count: {request_count}")
-            song_extracts = self.actions.get_song_titles(event["tip"]["message"], request_count)
+            song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
             logger.debug(f'song_extracts:  {song_extracts}')
             for song_info in song_extracts:
                 song_uri = self.actions.find_song_spotify(song_info["artist"], song_info["song"])

@@ -97,10 +97,10 @@ class DBHandler:
         )
         processor_thread.start()
 
-        network_thread = threading.Thread(
+        """network_thread = threading.Thread(
             target=self.long_polling, args=(), daemon=True
         )
-        network_thread.start()
+        network_thread.start()"""
 
         try:
             self.long_polling()
@@ -108,7 +108,7 @@ class DBHandler:
             logger.info("Keyboard interrupt detected. Cleaning up...")
             self._stop_event.set()
             processor_thread.join()
-            network_thread.join()
+            # network_thread.join()
             logger.info("Done.")
 
     def stop(self):

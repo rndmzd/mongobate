@@ -21,6 +21,10 @@ class CBEvents:
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
+            elif event_method == "userEnter":
+                process_result = self.user_enter(event_object)
+            elif event_method == "userLeave":
+                process_result = self.user_leave(event_object)
             elif event_method == "follow":
                 process_result = self.follow(event_object)
             elif event_method == "unfollow":
@@ -47,6 +51,24 @@ class CBEvents:
             # Process tip event
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
+            return False
+        return True
+    
+    def user_enter(self):
+        try:
+            logger.info("User enter event received.")
+            # Process user enter event
+        except Exception as e:
+            logger.exception("Error processing user enter event", exc_info=e)
+            return False
+        return True
+    
+    def user_leave(self):
+        try:
+            logger.info("User leave event received.")
+            # Process user leave event
+        except Exception as e:
+            logger.exception("Error processing user leave event", exc_info=e)
             return False
         return True
     

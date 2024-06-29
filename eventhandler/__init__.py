@@ -1,1 +1,1 @@
-from eventhandler.eventhandler import *
+from eventhandler.eventhandler import EventHandler

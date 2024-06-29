@@ -1,12 +1,32 @@
+import configparser
 import logging
+
+from chatdj import SongExtractor, AutoDJ
 
 logger = logging.getLogger('eventhandler.actions')
 logger.setLevel(logging.DEBUG)
 
+config = configparser.RawConfigParser()
+config.read("config.ini")
 
 class Actions:
     def __init__(self):
-        pass
+        self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
+        self.auto_dj = AutoDJ(
+            config.get("Spotify", "client_id"),
+            config.get("Spotify", "client_secret"),
+            config.get("Spotify", "redirect_uri")
+        )
 
-    def get_song_count(self, song_cost):
-        pass
+    def extract_song_titles(self, message, song_count):
+        return self.song_extractor.find_titles(message, song_count)
+    
+    def find_song_spotify(self, artist, title):
+        tracks = self.auto_dj.find_song(artist, title)
+        logger.debug(f'tracks: {tracks}')
+        if tracks:
+            return tracks[0]['uri']
+        return None
+    
+    def add_song_to_queue(self, uri):
+        return self.auto_dj.add_song_to_queue(uri)

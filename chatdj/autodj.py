@@ -115,6 +115,8 @@ class AutoDJ:
 
             logger.info("Starting playback.")
             self.spotify.start_playback(device_id=self.playback_device)
+
+            return True
             
         except SpotifyException as e:
             logger.exception("Failed to add song to queue", exc_info=e)

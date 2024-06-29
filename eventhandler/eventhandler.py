@@ -71,7 +71,7 @@ class EventHandler:
 
         logger.info("Starting event processing thread...")
         self.event_thread = threading.Thread(
-            target=self.process_event, args=(), daemon=True
+            target=self.event_processor, args=(), daemon=True
         )
         self.event_thread.start()
 

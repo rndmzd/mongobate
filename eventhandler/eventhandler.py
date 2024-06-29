@@ -5,8 +5,6 @@ import threading
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-from . import CBEvents
-
 logger = logging.getLogger('mongobate.eventhandler.eventhandler')
 logger.setLevel(logging.DEBUG)
 

@@ -3,3 +3,4 @@ env*/
 archive/
 logs/
 **__pycache__/
+.cache

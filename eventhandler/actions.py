@@ -15,7 +15,7 @@ class Actions:
         self.auto_dj = AutoDJ(
             config.get("Spotify", "client_id"),
             config.get("Spotify", "client_secret"),
-            config.get("Spotify", "redirect_uri")
+            config.get("Spotify", "redirect_url")
         )
 
     def extract_song_titles(self, message, song_count):

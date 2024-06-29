@@ -1,4 +1,4 @@
-env/
+env*/
 **config.ini
 archive/
 logs/

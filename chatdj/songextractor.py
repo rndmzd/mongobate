@@ -20,7 +20,8 @@ class SongExtractor:
                     },
                     {
                         "role": "user",
-                        "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message, and respond with only the song titles and the artist for each: {message}"
+                        "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."
+                        # , and respond with only the song titles and the artist for each
                         # "content": f"""Extract exactly {song_count} song title{"s" if song_count > 1 else ""} from the following message. Provide the response as a | separated list without any other unrelated text. The format should resemble "Artist--Song Title|Artist--Song Title|...". Each entry should be exactly in the format 'Artist--Song Title' with '|' separating multiple entries:
                         # 
                         # {message}"""
@@ -30,12 +31,13 @@ class SongExtractor:
             )
 
             logger.debug(f"response: {response}")
+            print(response)
 
-            song_titles_response = response.choices[0].message.content.strip().split('|')
+            song_titles_response = response.choices[0].message.content.strip().split('\n')
             song_titles = []
             for idx, resp in enumerate(song_titles_response):
-                if '--' in resp:
-                    artist, song = resp.split('--', 1)
+                if ' - ' in resp:
+                    artist, song = resp.split(' - ', 1)
                     song_titles.append(
                         {
                             "artist": artist.strip(),
@@ -47,7 +49,7 @@ class SongExtractor:
                     logger.warning(f"Unexpected format in response: {resp}")
                     #if len(song_titles_response) == 1 and song_count == 1:
                     if song_count == 1:
-                        logger.warning("Returning original request to attempt Spotify query.")
+                        logger.warning("Returning original request text as song title.")
                         song_titles.append(
                             {
                                 "artist": "",
@@ -64,3 +66,16 @@ class SongExtractor:
         except openai.APIError as e:
             logger.exception("Failed to extract song titles", exc_info=e)
             return []
+
+
+if __name__ == '__main__':
+    import configparser
+
+    config = configparser.RawConfigParser()
+    config.read("config.ini")
+
+    song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
+    message = "Play 'Dancing Queen' by ABBA and hit me baby one more time by britney spears"
+    song_count = 2
+    song_titles = song_extractor.find_titles(message, song_count)
+    print(song_titles)

@@ -5,8 +5,11 @@ import os
 import sys
 import time
 
-from mongobate.dbhandler import DBHandler
-from mongobate.eventhandler import EventHandler
+#from dbhandler.dbhandler import DBHandler
+#from mongobate.eventhandler import EventHandler
+
+from dbhandler import DBHandler
+from eventhandler import EventHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
 

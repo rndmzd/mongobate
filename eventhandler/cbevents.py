@@ -2,8 +2,8 @@ from bson import ObjectId
 import logging
 import simplejson as json
 
-from eventhandler import Actions
-from eventhandler import Checks
+from . import Actions
+from . import Checks
 
 logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)

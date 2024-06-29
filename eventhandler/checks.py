@@ -9,7 +9,7 @@ config.read("config.ini")
 
 class Checks:
     def __init__(self):
-        self.song_cost = config.getint("Song", "song_cost")
+        self.song_cost = config.getint("General", "song_cost")
 
     def is_song_request(self, tip_amount):
         if tip_amount % self.song_cost == 0:

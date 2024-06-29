@@ -77,10 +77,7 @@ if __name__ == '__main__':
             time.sleep(0.1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
-        print('DEBUG 1')
         db_handler.stop()
-        print('DEBUG 2')
         event_handler.stop()
-        print('DEBUG 3')
     finally:
         logger.info("Application has shut down.")

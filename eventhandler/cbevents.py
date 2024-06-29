@@ -1,5 +1,8 @@
 import logging
 import simplejson as json
+from pprint import PrettyPrinter
+
+pp = PrettyPrinter(indent=4)
 
 logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)
@@ -11,8 +14,11 @@ class CBEvents:
 
     def process_event(self, event):
         try:
-            #logger.info(json.dumps(event, sort_keys=True, indent=4))
-            print(event)
+            try:
+                print(json.dumps(event, sort_keys=True, indent=4))
+            except Exception as e:
+                logger.exception(e)
+                pp.pprint(event)
 
             event_method = event["method"]
             logger.debug(f"event_method: {event_method}")

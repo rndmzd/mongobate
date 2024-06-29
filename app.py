@@ -65,9 +65,6 @@ if __name__ == '__main__':
     event_handler = EventHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection)
 
-    # db_handler.run()
-    # event_handler.run()
-
     logger.debug('Spawning process for database handler.')
     db_process = Process(target=db_handler.run, args=())
     db_process.start()

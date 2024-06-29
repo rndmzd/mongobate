@@ -29,6 +29,8 @@ class SongExtractor:
                 model="gpt-4o"
             )
 
+            logger.debug(f"response: {response}")
+
             song_titles_response = response.choices[0].message.content.strip().split('|')
             song_titles = []
             for idx, resp in enumerate(song_titles_response):

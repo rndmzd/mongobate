@@ -28,7 +28,7 @@ class EventHandler:
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
         except ConnectionFailure as e:
-            print("Could not connect to MongoDB:", e)
+            logger.exception("Could not connect to MongoDB:", e)
             raise
 
     def event_processor(self):

@@ -42,7 +42,7 @@ class DBHandler:
             self.mongo_db = self.mongo_client[self.mongo_db_name]
             self.event_collection = self.mongo_db[self.mongo_collection_name]
         except ConnectionFailure as e:
-            logger.error(f"Could not connect to MongoDB: {e}")
+            logger.exception(f"Could not connect to MongoDB: {e}")
             raise
 
     def archive_event(self, event):

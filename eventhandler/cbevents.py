@@ -2,6 +2,7 @@ import logging
 import simplejson as json
 
 logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 
 class CBEvents:

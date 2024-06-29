@@ -10,8 +10,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
 logger = logging.getLogger()
-# logging.basicConfig()
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 
 class DBHandler:

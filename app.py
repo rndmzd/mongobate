@@ -81,7 +81,8 @@ if __name__ == '__main__':
         db_handler.stop()
         print('DEBUG 2')
         # event_handler.stop()
-        _stop_event.set()
+        # _stop_event.set()
+        event_handler.stop()
         print('DEBUG 3')
     finally:
         logger.info("Application has shut down.")

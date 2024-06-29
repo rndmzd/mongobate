@@ -50,9 +50,9 @@ class CBEvents:
                 process_result = self.follow(event_object)
             elif event_method == "unfollow":
                 process_result = self.unfollow(event_object)
-            elif event_method == "media_purchase":
+            elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
-            elif event_method == "chat_message":
+            elif event_method == "chatMessage":
                 process_result = self.chat_message(event_object)
             else:
                 logger.warning(f"Unknown event method: {event_method}")

@@ -11,7 +11,8 @@ class CBEvents:
 
     def process_event(self, event):
         try:
-            logger.info(json.dumps(event, sort_keys=True, indent=4))
+            #logger.info(json.dumps(event, sort_keys=True, indent=4))
+            print(event)
 
             event_method = event["method"]
             logger.debug(f"event_method: {event_method}")

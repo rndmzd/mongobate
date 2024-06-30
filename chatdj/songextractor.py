@@ -21,10 +21,6 @@ class SongExtractor:
                     {
                         "role": "user",
                         "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."
-                        # , and respond with only the song titles and the artist for each
-                        # "content": f"""Extract exactly {song_count} song title{"s" if song_count > 1 else ""} from the following message. Provide the response as a | separated list without any other unrelated text. The format should resemble "Artist--Song Title|Artist--Song Title|...". Each entry should be exactly in the format 'Artist--Song Title' with '|' separating multiple entries:
-                        # 
-                        # {message}"""
                     }
                 ],
                 model="gpt-4o"

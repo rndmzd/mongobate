@@ -25,7 +25,10 @@ class Actions:
         tracks = self.auto_dj.find_song(song_info)
         logger.debug(f'tracks: {tracks}')
         if tracks:
-            return tracks[0]['uri']
+            top_result = tracks['items'][0]
+            logger.debug(f'top_result: {top_result}')
+            return top_result['uri']
+        logger.warning(f'No tracks found for {song_info}')
         return None
     
     def add_song_to_queue(self, uri):

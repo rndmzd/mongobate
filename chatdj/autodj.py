@@ -70,7 +70,9 @@ class AutoDJ:
     def find_song(self, song_info):
         """Add the song title to the Spotify playback queue."""
         try:
-            results = self.spotify.search(q=f"{song_info['artist']} - {song_info['song']}", type='track', limit=1)
+            find_song_query = f"{song_info['artist']} - {song_info['song']}"
+            logger.debug(f'find_song_query: {find_song_query}')
+            results = self.spotify.search(q=find_song_query, type='track', limit=1)
             logger.debug(f'results: {results}')
             return results
         except SpotifyException as e:

@@ -79,6 +79,22 @@ class AutoDJ:
             logger.exception("Failed to find song", exc_info=e)
             return None
     
+    def get_user_market(self):
+        try:
+            user_info = self.spotify.me()
+            logger.debug(f"user_info: {user_info}")
+            return user_info['country']
+        except SpotifyException as e:
+            logger.exception("Failed to get user market", exc_info=e)
+    
+    def get_song_markets(self, track_uri):
+        try:
+            track_info = self.spotify.track(track_uri)
+            logger.debug(f"track_info: {track_info}")
+            return track_info['available_markets']
+        except SpotifyException as e:
+            logger.exception("Failed to get song markets", exc_info=e)
+    
     def get_device_info(self, device_id):
         try:
             devices = self.spotify.devices()

@@ -84,12 +84,16 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Tip event received.")
             # Process tip event
+            logger.info("Tip event received.")
+            
+            ## Chat Auto DJ ##
+            logger.info("Checking if song request.")
             if not self.checks.is_song_request(event["tip"]["tokens"]):
                 return False
+            logger.info("Song request detected.")
             request_count = self.checks.get_request_count(event["tip"]["tokens"])
-            logger.info(f"Song request detected. Request count: {request_count}")
+            logger.info(f"Request count: {request_count}")
             song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
             logger.debug(f'song_extracts:  {song_extracts}')
             for song_info in song_extracts:
@@ -102,6 +106,7 @@ class CBEvents:
                         logger.error(f"Failed to add song to queue: {song_info}")
                     else:
                         logger.info(f"Song added to queue: {song_info}")
+
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False

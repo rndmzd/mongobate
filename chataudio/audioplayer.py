@@ -6,13 +6,31 @@ logger = logging.getLogger('mongobate.chataudio.audioplayer')
 logger.setLevel(logging.DEBUG)
 
 class AudioPlayer:
-    def __init__(self, device_name):
+    def __init__(self, device_name=None):
         pygame.mixer.init()
         self.device_name = device_name
         self.current_device = None
-        self.set_output_device(device_name)
+        if not self.device_name:
+            self.device_name = self.user_select_audio_device()
+        device_select_result = self.set_output_device(self.device_name)
+        logger.debug(f"device_select_result: {device_select_result}")
         self.play_thread = None
         self.stop_event = Event()
+
+    def user_select_audio_device(self):
+        pygame.mixer.init()
+        pygame.mixer.quit()
+        pygame.mixer.init(44100, -16, 2, 1024)
+
+        print("Available audio devices:\n")
+        for i in range(pygame.mixer.get_num_devices()):
+            device_name = pygame.mixer.get_device_name(i)
+            print(f"{i+1} => {device_name}")
+        user_selection = int(input(f"\nSelect an audio device (1-{pygame.mixer.get_num_devices()}): ")) # or press Enter to use the default device: ")
+        logger.debug(f"user_selection: {user_selection}")
+        device_num = user_selection - 1
+        logger.debug(f"device_num: {device_num}")
+        return pygame.mixer.get_device_name(device_num)
 
     def set_output_device(self, device_name):
         devices = pygame.mixer.get_init()
@@ -22,8 +40,9 @@ class AudioPlayer:
                 pygame.mixer.init(devicename=device_name)
                 self.current_device = device_name
                 logger.info(f"Set output device to: {device_name}")
-                return
+                return True
         logger.warning(f"Device '{device_name}' not found. Using default device.")
+        return False
 
     def play_audio(self, file_path):
         if self.play_thread and self.play_thread.is_alive():

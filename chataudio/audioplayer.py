@@ -47,7 +47,7 @@ class AudioPlayer:
     def set_output_device(self, device_name):
         output_devices = self.get_output_devices()
         for i in range(len(output_devices)):
-            if pygame.mixer.get_device_name(i) == device_name:
+            if output_devices[i] == device_name:
                 pygame.mixer.quit()
                 pygame.mixer.init(devicename=device_name)
                 self.current_device = device_name

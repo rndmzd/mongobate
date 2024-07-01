@@ -1,7 +1,7 @@
 import logging
 import openai
 
-logger = logging.getLogger('chatdj.songextractor')
+logger = logging.getLogger('mongobate.chatdj.songextractor')
 logger.setLevel(logging.DEBUG)
 
 

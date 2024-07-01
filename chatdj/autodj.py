@@ -3,7 +3,7 @@ import sys
 
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
 
-logger = logging.getLogger('chatdj.autodj')
+logger = logging.getLogger('mongobate.chatdj.autodj')
 logger.setLevel(logging.DEBUG)
 
 

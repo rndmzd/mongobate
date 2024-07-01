@@ -3,7 +3,7 @@ import logging
 
 from chatdj import SongExtractor, AutoDJ
 
-logger = logging.getLogger('eventhandler.actions')
+logger = logging.getLogger('mongobate.eventhandler.actions')
 logger.setLevel(logging.DEBUG)
 
 config = configparser.RawConfigParser()

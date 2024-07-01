@@ -27,9 +27,9 @@ class CBEvents:
         self.checks = Checks()
 
         self.active_components = self.checks.get_active_components()
-        logger.info(f"Active Components:\n{[comp + '\n' for comp in self.active_components]}")
+        logger.info(f"Active Components:\n{["\n".join(comp) for comp in self.active_components]}")
 
-        self.vip_cooldown_seconds = config.getint("General", "vip_cooldown") * 60 * 60
+        self.vip_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
         logger.debug(f"self.vip_cooldown_seconds: {self.vip_cooldown_seconds}")
 
         self.vip_cooldown = {}

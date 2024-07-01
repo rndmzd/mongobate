@@ -13,7 +13,6 @@ config = configparser.RawConfigParser()
 config.read("config.ini")
 
 
-
 class MongoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ObjectId):
@@ -28,8 +27,11 @@ class CBEvents:
 
         self.active_components = []
         for component in [comp for comp in config['Components']]:
-            if config.getboolean('Components', component):
+            component_val = config.getboolean('Components', component)
+            logger.debug(f"{component} -> {component_val}")
+            if component_val:
                 self.active_components.append(component)
+        logger.debug(f"Active components: {self.active_components}")
 
     def process_event(self, event):
         try:

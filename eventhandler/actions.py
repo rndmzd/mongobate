@@ -22,7 +22,7 @@ class Actions:
         return self.song_extractor.find_titles(message, song_count)
     
     def find_song_spotify(self, song_info):
-        tracks = self.auto_dj.find_song(song_info)
+        tracks = self.auto_dj.find_song(song_info)['tracks']
         logger.debug(f'tracks: {tracks}')
         if tracks:
             top_result = tracks['items'][0]

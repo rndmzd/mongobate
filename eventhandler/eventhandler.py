@@ -17,7 +17,8 @@ class EventHandler:
             mongo_db,
             mongo_collection,
             vip_collection=None,
-            vip_refresh_interval=300):
+            vip_refresh_interval=300,
+            audio_device=None):
         from .cbevents import CBEvents
         
         self.event_queue = queue.Queue()
@@ -35,8 +36,12 @@ class EventHandler:
             raise
 
         if 'vip_audio' in self.cb_events.active_components:
+            if not audio_device:
+                logger.error("VIP audio is enabled. Must provide audio device name for output.")
+                raise ValueError("audio_device must be provided when VIP audio is enabled.")
+            from chataudio import AudioPlayer
             ##  TODO: AudioPlayer
-            #  self.autio_player = AudioPlayer(config.get('General', 'audio_device'))
+            self.audio_player = AudioPlayer(audio_device)
             self.vip_users = {}
             self.vip_refresh_interval = vip_refresh_interval
             self.load_vip_users()
@@ -48,6 +53,11 @@ class EventHandler:
             logger.info(f"Loaded {len(self.vip_users)} VIP users.")
         except Exception as e:
             logger.exception("Error loading VIP users:", exc_info=e)
+    
+    def vip_refresh_loop(self):
+        while not self._stop_event.is_set():
+            time.sleep(self.vip_refresh_interval)
+            self.load_vip_users()
 
     def event_processor(self):
         """
@@ -93,15 +103,18 @@ class EventHandler:
         )
         self.event_thread.start()
 
+        logger.info("Starting VIP refresh thread...")
+        self.vip_refresh_thread = threading.Thread(
+            target=self.vip_refresh_loop, args=(), daemon=True
+        )
+
     def stop(self):
         logger.debug("Setting stop event.")
         self._stop_event.set()
-        if self.watcher_thread.is_alive():
-            logger.debug("Joining watcher thread.")
-            self.watcher_thread.join()
-        if self.event_thread.is_alive():
-            logger.debug("Joining event thread.")
-            self.event_thread.join()
+        for thread in [self.watcher_thread, self.event_thread, self.vip_refresh_thread]:
+            if thread.is_alive():
+                logger.debug(f"Joining {thread.name} thread.")
+                thread.join()
         logger.debug("Checking if MongoDB connection still active.")
         self.cleanup()
 

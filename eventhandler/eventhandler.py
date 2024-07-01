@@ -15,7 +15,9 @@ class EventHandler:
             mongo_host,
             mongo_port,
             mongo_db,
-            mongo_collection):
+            mongo_collection,
+            vip_collection=None,
+            vip_refresh_interval=300):
         from .cbevents import CBEvents
         
         self.event_queue = queue.Queue()
@@ -27,9 +29,25 @@ class EventHandler:
             self.mongo_client = MongoClient(host=mongo_host, port=mongo_port)
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
+            self.vip_collection = self.mongo_db[vip_collection] if 'vip_audio' in self.cb_events.active_components else None
         except ConnectionFailure as e:
-            logger.exception("Could not connect to MongoDB:", e)
+            logger.exception("Could not connect to MongoDB:", exc_info=e)
             raise
+
+        if 'vip_audio' in self.cb_events.active_components:
+            ##  TODO: AudioPlayer
+            #  self.autio_player = AudioPlayer(config.get('General', 'audio_device'))
+            self.vip_users = {}
+            self.vip_refresh_interval = vip_refresh_interval
+            self.load_vip_users()
+    
+    def load_vip_users(self):
+        try:
+            vip_users = self.vip_collection.find()
+            self.vip_users = {user['username']: user['audio_file'] for user in vip_users}
+            logger.info(f"Loaded {len(self.vip_users)} VIP users.")
+        except Exception as e:
+            logger.exception("Error loading VIP users:", exc_info=e)
 
     def event_processor(self):
         """
@@ -44,7 +62,7 @@ class EventHandler:
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
             except Exception as e:
-                logger.exception("Error in event processor", exc_info=e)
+                logger.exception("Error in event processor:" , exc_info=e)
 
     def watch_changes(self):
         try:
@@ -57,7 +75,7 @@ class EventHandler:
                         doc = change["fullDocument"]
                         self.event_queue.put(doc)
         except Exception as e:
-            logger.exception("An error occurred while watching changes: %s", e)
+            logger.exception("An error occurred while watching changes: %s", exc_info=e)
         finally:
             if not self._stop_event.is_set():
                 self.cleanup()

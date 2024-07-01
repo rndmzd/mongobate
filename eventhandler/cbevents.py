@@ -25,13 +25,8 @@ class CBEvents:
         self.actions = Actions()
         self.checks = Checks()
 
-        self.active_components = []
-        for component in [comp for comp in config['Components']]:
-            component_val = config.getboolean('Components', component)
-            logger.debug(f"{component} -> {component_val}")
-            if component_val:
-                self.active_components.append(component)
-        logger.debug(f"Active components: {self.active_components}")
+        self.active_components = self.checks.get_active_components()
+        logger.info(f"Active Components:\n{[comp + '\n' for comp in self.active_components]}")
 
     def process_event(self, event):
         try:
@@ -254,8 +249,9 @@ class CBEvents:
         }
         """
         try:
-            logger.info("User enter event received.")
             # Process user enter event
+            if 'vip_audio' in self.active_components:
+                pass
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)
             return False

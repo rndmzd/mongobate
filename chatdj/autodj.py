@@ -14,7 +14,7 @@ class AutoDJ:
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,
-            scope="user-modify-playback-state user-read-playback-state user-read-currently-playing",
+            scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-read-private",
             open_browser=False
         )
 

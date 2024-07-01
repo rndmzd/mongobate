@@ -38,7 +38,7 @@ class AudioPlayer:
         for i in range(len(output_devices)):
             device_name = output_devices[i]
             print(f"{i+1} => {device_name}")
-        user_selection = int(input(f"\nSelect an audio device (1-{pygame.mixer.get_num_devices()}): ")) # or press Enter to use the default device: ")
+        user_selection = int(input(f"\nSelect an audio device (1-{len(output_devices)}): ")) # or press Enter to use the default device: ")
         logger.debug(f"user_selection: {user_selection}")
         device_num = user_selection - 1
         logger.debug(f"device_num: {device_num}")

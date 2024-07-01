@@ -29,6 +29,11 @@ class CBEvents:
         self.active_components = self.checks.get_active_components()
         logger.info(f"Active Components:\n{[comp + '\n' for comp in self.active_components]}")
 
+        self.vip_cooldown_seconds = config.getint("General", "vip_cooldown") * 60 * 60
+        logger.debug(f"self.vip_cooldown_seconds: {self.vip_cooldown_seconds}")
+
+        self.vip_cooldown = {}
+
     def process_event(self, event):
         try:
             print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
@@ -255,10 +260,14 @@ class CBEvents:
                 username = event['user']['username']
                 if username in self.vip_users:
                     current_time = time.time()
-                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_cooldown_time:
+                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_cooldown_seconds:
                         logger.info(f"VIP user {username} entered the room. Playing user audio.")    
                         audio_file = self.vip_users[username]
+                        logger.debug(f"audio_file: {audio_file}")
+                        logger.info(f"Playing VIP audio for user: {username}")
                         self.audio_player.play_audio(audio_file)
+                        logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
+                        self.vip_cooldown[username] = current_time
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)
             return False

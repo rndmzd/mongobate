@@ -5,12 +5,6 @@ import os
 import sys
 import time
 
-from multiprocessing import Event, Process
-
-#from dbhandler.dbhandler import DBHandler
-#from mongobate.eventhandler import EventHandler
-
-from dbhandler import DBHandler
 from eventhandler import EventHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -46,30 +40,16 @@ logger.addHandler(file_handler)
 
 
 if __name__ == '__main__':
-    events_api_url = config.get("Events API", "url")
-    requests_per_minute = config.getint(
-        "Events API", "max_requests_per_minute")
-
     mongo_host = config.get("MongoDB", "host")
     mongo_port = config.getint("MongoDB", "port")
     mongo_db = config.get("MongoDB", "db")
     mongo_collection = config.get("MongoDB", "collection")
-
-    logger.debug('Initializing database handler.')
-    db_handler = DBHandler(
-        mongo_host, mongo_port, mongo_db, mongo_collection,
-        events_api_url=events_api_url,
-        requests_per_minute=requests_per_minute)
     
     logger.debug('Initializing event handler.')
     event_handler = EventHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection)
 
-    logger.debug('Spawning process for database handler.')
-    db_process = Process(target=db_handler.run, args=())
-    db_process.start()
-
-    logger.debug('Calling event handler start.')
+    logger.debug('Running event handler.')
     event_handler.run()
 
     try:
@@ -77,7 +57,6 @@ if __name__ == '__main__':
             time.sleep(0.1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
-        db_handler.stop()
         event_handler.stop()
     finally:
         logger.info("Application has shut down.")

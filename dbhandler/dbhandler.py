@@ -42,7 +42,7 @@ class DBHandler:
             self.mongo_db = self.mongo_client[self.mongo_db_name]
             self.event_collection = self.mongo_db[self.mongo_collection_name]
         except ConnectionFailure as e:
-            logger.error(f"Could not connect to MongoDB: {e}")
+            logger.exception(f"Could not connect to MongoDB: {e}")
             raise
 
     def archive_event(self, event):
@@ -97,10 +97,10 @@ class DBHandler:
         )
         processor_thread.start()
 
-        network_thread = threading.Thread(
+        """network_thread = threading.Thread(
             target=self.long_polling, args=(), daemon=True
         )
-        network_thread.start()
+        network_thread.start()"""
 
         try:
             self.long_polling()
@@ -108,7 +108,7 @@ class DBHandler:
             logger.info("Keyboard interrupt detected. Cleaning up...")
             self._stop_event.set()
             processor_thread.join()
-            network_thread.join()
+            # network_thread.join()
             logger.info("Done.")
 
     def stop(self):

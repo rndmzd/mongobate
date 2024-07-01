@@ -1,9 +1,16 @@
+import configparser
 from bson import ObjectId
 import logging
 import simplejson as json
 
+from . import Actions
+from . import Checks
+
 logger = logging.getLogger('mongobate.eventhandler.cbevents')
 logger.setLevel(logging.DEBUG)
+
+config = configparser.RawConfigParser()
+config.read("config.ini")
 
 
 class MongoJSONEncoder(json.JSONEncoder):
@@ -15,15 +22,20 @@ class MongoJSONEncoder(json.JSONEncoder):
 
 class CBEvents:
     def __init__(self):
-        pass
+        self.actions = Actions()
+        self.checks = Checks()
+
+        self.active_components = []
+        for component in [comp for comp in config['Components']]:
+            component_val = config.getboolean('Components', component)
+            logger.debug(f"{component} -> {component_val}")
+            if component_val:
+                self.active_components.append(component)
+        logger.debug(f"Active components: {self.active_components}")
 
     def process_event(self, event):
         try:
-            try:
-                print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
-            except Exception as e:
-                logger.exception(e)
-                pp.pprint(event)
+            print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
 
             event_method = event["method"]
             logger.debug(f"event_method: {event_method}")
@@ -32,6 +44,16 @@ class CBEvents:
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
+            elif event_method == "broadcastStart":
+                process_result = self.broadcast_start(event_object)
+            elif event_method == "broadcastStop":
+                process_result = self.broadcast_stop(event_object)
+            elif event_method == "fanclubJoin":
+                process_result = self.fanclub_join(event_object)
+            elif  event_method == "privateMessage":
+                process_result = self.private_message(event_object)
+            elif event_method == "roomSubjectChange":
+                process_result = self.room_subject_change(event_object)
             elif event_method == "userEnter":
                 process_result = self.user_enter(event_object)
             elif event_method == "userLeave":
@@ -40,12 +62,10 @@ class CBEvents:
                 process_result = self.follow(event_object)
             elif event_method == "unfollow":
                 process_result = self.unfollow(event_object)
-            elif event_method == "media_purchase":
+            elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
-            elif event_method == "chat_message":
+            elif event_method == "chatMessage":
                 process_result = self.chat_message(event_object)
-            elif event_method == "broadcast":
-                process_result = self.broadcast(event_object)
             else:
                 logger.warning(f"Unknown event method: {event_method}")
                 process_result = False
@@ -57,15 +77,182 @@ class CBEvents:
         return process_result
 
     def tip(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "tip": {
+                "tokens": 25,
+                "isAnon": false,
+                "message": ""
+            },
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "f",
+                "hasTokens": true,
+                "recentTips": "some",
+                "isMod": false
+            }
+        }
+        """
         try:
-            logger.info("Tip event received.")
             # Process tip event
+            logger.info("Tip event received.")
+            
+            ## Chat Auto DJ ##
+            if 'chat_auto_dj' in self.active_components:
+                logger.info("Checking if song request.")
+                if not self.checks.is_song_request(event["tip"]["tokens"]):
+                    return False
+                logger.info("Song request detected.")
+                request_count = self.checks.get_request_count(event["tip"]["tokens"])
+                logger.info(f"Request count: {request_count}")
+                song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
+                logger.debug(f'song_extracts:  {song_extracts}')
+                for song_info in song_extracts:
+                    song_uri = self.actions.find_song_spotify(song_info)
+                    logger.debug(f'song_uri: {song_uri}')
+                    if song_uri:
+                        if not self.actions.available_in_market(song_uri):
+                            logger.warning(f"Song not available in user market: {song_info}")
+                            continue
+                        add_queue_result = self.actions.add_song_to_queue(song_uri)
+                        logger.debug(f'add_queue_result: {add_queue_result}')
+                        if not add_queue_result:
+                            logger.error(f"Failed to add song to queue: {song_info}")
+                        else:
+                            logger.info(f"Song added to queue: {song_info}")
+
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False
         return True
     
+    def broadcast_start(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
+        try:
+            logger.info("Broadcast start event received.")
+            # Process broadcast start event
+        except Exception as e:
+            logger.exception("Error processing broadcast start event", exc_info=e)
+            return False
+        return True
+    
+    def broadcast_stop(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
+        try:
+            logger.info("Broadcast stop event received.")
+            # Process broadcast stop event
+        except Exception as e:
+            logger.exception("Error processing broadcast stop event", exc_info=e)
+            return False
+        return True
+    
+    def fanclub_join(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": true,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
+        try:
+            logger.info("Fanclub join event received.")
+            # Process fanclub join event
+        except Exception as e:
+            logger.exception("Error processing fanclub join event", exc_info=e)
+            return False
+        return True
+    
+    def private_message(self, event):
+        """
+        {
+            "message": {
+                "color": "",
+                "toUser": "testuser",
+                "bgColor": null,
+                "fromUser": "testuser1",
+                "message": "hello",
+                "font": "default",
+            },
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
+        try:
+            logger.info("Private message event received.")
+            # Process private message event
+        except Exception as e:
+            logger.exception("Error processing private message event", exc_info=e)
+            return False
+        return True
+    
+    def room_subject_change(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "subject": "Testuser's room"
+        }
+        """
+        try:
+            logger.info("Room subject change event received.")
+            # Process room subject change event
+        except Exception as e:
+            logger.exception("Error processing room subject change event", exc_info=e)
+            return False
+        return True
+    
     def user_enter(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
         try:
             logger.info("User enter event received.")
             # Process user enter event
@@ -75,6 +262,19 @@ class CBEvents:
         return True
     
     def user_leave(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
         try:
             logger.info("User leave event received.")
             # Process user leave event
@@ -84,6 +284,19 @@ class CBEvents:
         return True
     
     def follow(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
         try:
             logger.info("Follow event received.")
             # Process follow event
@@ -93,6 +306,19 @@ class CBEvents:
         return True
 
     def unfollow(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
         try:
             logger.info("Unfollow event received.")
             # Process unfollow event
@@ -102,6 +328,25 @@ class CBEvents:
         return True
 
     def media_purchase(self, event):
+        """
+        {
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            },
+            "media": {
+                "id": 1,
+                "name": "photoset1",
+                "type": "photos",
+                "tokens": 25
+            }
+        }
+        """
         try:
             logger.info("Media purchase event received.")
             # Process media purchase event
@@ -111,6 +356,25 @@ class CBEvents:
         return True
 
     def chat_message(self, event):
+        """
+        {
+            "message": {
+                "color": "#494949",
+                "bgColor": null,
+                "message": "hello",
+                "font": "default",
+            },
+            "broadcaster": "testuser",
+            "user": {
+                "username": "testuser1",
+                "inFanclub": false,
+                "gender": "m",
+                "hasTokens": true,
+                "recentTips": "none",
+                "isMod": false
+            }
+        }
+        """
         try:
             logger.info("Chat message event received.")
             # Process chat message event
@@ -119,11 +383,3 @@ class CBEvents:
             return False
         return True
     
-    def broadcast(self, event):
-        try:
-            logger.info("Broadcast event received.")
-            # Process broadcast event
-        except Exception as e:
-            logger.exception("Error processing broadcast event", exc_info=e)
-            return False
-        return True

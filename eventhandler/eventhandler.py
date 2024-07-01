@@ -5,8 +5,6 @@ import threading
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-from eventhandler.cbevents import CBEvents
-
 logger = logging.getLogger('mongobate.eventhandler.eventhandler')
 logger.setLevel(logging.DEBUG)
 
@@ -18,6 +16,8 @@ class EventHandler:
             mongo_port,
             mongo_db,
             mongo_collection):
+        from .cbevents import CBEvents
+        
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()
 
@@ -28,7 +28,7 @@ class EventHandler:
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
         except ConnectionFailure as e:
-            print("Could not connect to MongoDB:", e)
+            logger.exception("Could not connect to MongoDB:", e)
             raise
 
     def event_processor(self):

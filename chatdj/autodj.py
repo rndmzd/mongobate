@@ -142,8 +142,8 @@ class AutoDJ:
                 return True
             
             ## TODO: Check if this is necessary
-            # logger.info("Skipping to next track.")
-            # self.spotify.next_track(device_id=self.playback_device)
+            logger.info("Skipping to next track.")
+            self.spotify.next_track(device_id=self.playback_device)
 
             logger.info("Starting playback.")
             self.spotify.start_playback(device_id=self.playback_device)

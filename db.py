@@ -47,7 +47,7 @@ if __name__ == '__main__':
     mongo_host = config.get("MongoDB", "host")
     mongo_port = config.getint("MongoDB", "port")
     mongo_db = config.get("MongoDB", "db")
-    mongo_collection = config.get("MongoDB", "collection")
+    mongo_collection = config.get("MongoDB", "event_collection")
 
     logger.debug('Initializing database handler.')
     db_handler = DBHandler(

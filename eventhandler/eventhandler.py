@@ -36,9 +36,9 @@ class EventHandler:
             raise
 
         if 'vip_audio' in self.cb_events.active_components:
-            if not audio_device:
-                logger.error("VIP audio is enabled. Must provide audio device name for output.")
-                raise ValueError("audio_device must be provided when VIP audio is enabled.")
+            # if not audio_device:
+            #     logger.error("VIP audio is enabled. Must provide audio device name for output.")
+            #     raise ValueError("audio_device must be provided when VIP audio is enabled.")
             from chataudio import AudioPlayer
             ##  TODO: AudioPlayer
             self.audio_player = AudioPlayer(audio_device)

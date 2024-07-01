@@ -125,7 +125,7 @@ class AutoDJ:
             logger.info("Adding song to active playback queue.")
             self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
 
-            if is_playing is True:
+            if is_playing is not None and is_playing:
                 return True
             
             logger.info("Skipping to next track.")

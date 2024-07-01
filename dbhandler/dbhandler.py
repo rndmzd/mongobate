@@ -1,3 +1,4 @@
+import datetime
 import logging
 import queue
 import threading
@@ -47,6 +48,8 @@ class DBHandler:
 
     def archive_event(self, event):
         try:
+            event['timestamp'] = datetime.datetime.now(tz=datetime.timezone.utc)
+            logger.debug(f"event['timestamp']: {event['timestamp']}")
             result = self.event_collection.insert_one(event)
             logger.debug(f"result.inserted_id: {result.inserted_id}")
         except Exception as e:

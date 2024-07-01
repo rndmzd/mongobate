@@ -2,6 +2,7 @@ import configparser
 from bson import ObjectId
 import logging
 import simplejson as json
+import time
 
 from . import Actions
 from . import Checks
@@ -251,7 +252,13 @@ class CBEvents:
         try:
             # Process user enter event
             if 'vip_audio' in self.active_components:
-                pass
+                username = event['user']['username']
+                if username in self.vip_users:
+                    current_time = time.time()
+                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_cooldown_time:
+                        logger.info(f"VIP user {username} entered the room. Playing user audio.")    
+                        audio_file = self.vip_users[username]
+                        self.audio_player.play_audio(audio_file)
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)
             return False

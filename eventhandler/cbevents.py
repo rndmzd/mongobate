@@ -1,4 +1,5 @@
 import configparser
+import datetime
 from bson import ObjectId
 import logging
 import simplejson as json
@@ -16,27 +17,22 @@ config = configparser.RawConfigParser()
 config.read("config.ini")
 
 
-"""class MongoJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, ObjectId):
-            return str(obj)
-        return super().default(obj)"""
-
-
 class CBEvents:
     def __init__(self):
         self.actions = Actions()
         self.checks = Checks()
 
         self.active_components = self.checks.get_active_components()
-        logger.info(f"Active Components: {[comp for comp in self.active_components]}")
+        logger.info(f"Active Components: {self.active_components}")
 
         self.vip_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
         logger.debug(f"self.vip_cooldown_seconds: {self.vip_cooldown_seconds}")
 
         self.vip_cooldown = {}
+        # self.vip_users = {}
+        self.vip_audio_directory = config.get("General", "vip_audio_directory")
 
-    def process_event(self, event):
+    def process_event(self, event, vip_users, audio_player):
         try:
             print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
 
@@ -44,6 +40,9 @@ class CBEvents:
             logger.debug(f"event_method: {event_method}")
             event_object = event["object"]
             logger.debug(f"event_object: {event_object}")
+
+            # self.vip_users = vip_users
+            # logger.debug(f"self.vip_users: {self.vip_users}")
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
@@ -58,7 +57,7 @@ class CBEvents:
             elif event_method == "roomSubjectChange":
                 process_result = self.room_subject_change(event_object)
             elif event_method == "userEnter":
-                process_result = self.user_enter(event_object)
+                process_result = self.user_enter(event_object, vip_users, audio_player)
             elif event_method == "userLeave":
                 process_result = self.user_leave(event_object)
             elif event_method == "follow":
@@ -242,7 +241,7 @@ class CBEvents:
             return False
         return True
     
-    def user_enter(self, event):
+    def user_enter(self, event, vip_users, audio_player):
         """
         {
             "broadcaster": "testuser",
@@ -258,16 +257,21 @@ class CBEvents:
         """
         try:
             # Process user enter event
+            logger.info("User enter event received.")
+
             if 'vip_audio' in self.active_components:
                 username = event['user']['username']
-                if username in self.vip_users:
+                if username in vip_users.keys():
+                    logger.info(f"VIP user {username} entered the room.")
                     current_time = time.time()
                     if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_cooldown_seconds:
-                        logger.info(f"VIP user {username} entered the room. Playing user audio.")    
-                        audio_file = self.vip_users[username]
+                        logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
+                        audio_file = vip_users[username]
                         logger.debug(f"audio_file: {audio_file}")
+                        audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                        logger.debug(f"audio_file_path: {audio_file_path}")
                         logger.info(f"Playing VIP audio for user: {username}")
-                        self.audio_player.play_audio(audio_file)
+                        audio_player.play_audio(audio_file_path)
                         logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
                         self.vip_cooldown[username] = current_time
         except Exception as e:

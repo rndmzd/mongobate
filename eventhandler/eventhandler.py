@@ -78,8 +78,10 @@ class EventHandler:
 
     def load_vip_users(self):
         try:
-            vip_users = self.vip_collection.find()
-            self.vip_users = {user['username']: user['audio_file'] for user in vip_users}
+            vip_users = self.vip_collection.find({})
+            for user in vip_users:
+                logger.debug(f"user: {user}")
+                self.vip_users[user['username']] = user['audio_file']
             logger.info(f"Loaded {len(self.vip_users)} VIP users.")
         except Exception as e:
             logger.exception("Error loading VIP users:", exc_info=e)
@@ -96,7 +98,7 @@ class EventHandler:
         while not self._stop_event.is_set():
             try:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
-                process_result = self.cb_events.process_event(event)
+                process_result = self.cb_events.process_event(event, self.vip_users, self.audio_player)
                 logger.debug(f"process_result: {process_result}")
                 self.event_queue.task_done()
             except queue.Empty:

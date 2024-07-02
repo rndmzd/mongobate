@@ -10,6 +10,8 @@ from requests.exceptions import RequestException
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
+import urllib.parse
+
 logger = logging.getLogger('mongobate.dbhandler.dbhandler')
 logger.setLevel(logging.DEBUG)
 
@@ -22,7 +24,9 @@ class DBHandler:
             mongo_db,
             mongo_collection,
             events_api_url,
-            requests_per_minute=1000):
+            requests_per_minute=1000,
+            aws_key=None,
+            aws_secret=None):
         self.mongo_host = mongo_host
         self.mongo_port = mongo_port
         self.mongo_db_name = mongo_db
@@ -37,11 +41,30 @@ class DBHandler:
         self.mongo_db = None
         self.event_collection = None
 
+        self.mongo_connection_uri = None
+        if aws_key and aws_secret:
+            aws_key_pe = urllib.parse.quote_plus(aws_key)
+            aws_secret_pe = urllib.parse.quote_plus(aws_secret)
+            mongo_host_pe = urllib.parse.quote_plus(mongo_host)
+            mongo_port_pe = urllib.parse.quote_plus(str(mongo_port))
+
+            # Construct the URI with proper escaping and formatting
+            self.mongo_connection_uri = (
+                f"mongodb://{aws_key_pe}:{aws_secret_pe}@"
+                f"[{mongo_host_pe}]:{mongo_port_pe}/"
+                f"?authMechanism=MONGODB-AWS&authSource=$external"
+            )
+
     def connect_to_mongodb(self):
         try:
-            self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port)
-            self.mongo_db = self.mongo_client[self.mongo_db_name]
-            self.event_collection = self.mongo_db[self.mongo_collection_name]
+            if self.mongo_connection_uri:
+                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                self.mongo_client = MongoClient(self.mongo_connection_uri)
+            else:
+                self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port)
+
+            self.mongo_db = self.mongo_client[self.mongo_db]
+            self.event_collection = self.mongo_db[self.mongo_collection]
         except ConnectionFailure as e:
             logger.exception(f"Could not connect to MongoDB: {e}")
             raise

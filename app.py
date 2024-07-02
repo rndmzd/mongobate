@@ -46,11 +46,29 @@ if __name__ == '__main__':
     event_collection = config.get("MongoDB", "event_collection")
     vip_collection = config.get("MongoDB", "vip_collection")
     vip_refresh_interval = config.getint("General", "vip_refresh_interval")
-    
+
+    aws_key = (
+        config.get("MongoDB", "aws_key")
+        if len(config.get("MongoDB", "aws_key")) > 0
+        else None
+    )
+    aws_secret = (
+        config.get("MongoDB", "aws_secret")
+        if len(config.get("MongoDB", "aws_secret")) > 0
+        else None
+    )
+
     logger.debug('Initializing event handler.')
     event_handler = EventHandler(
-        mongo_host, mongo_port, mongo_db, event_collection,
-        vip_collection=vip_collection, vip_refresh_interval=vip_refresh_interval)
+        mongo_host,
+        mongo_port,
+        mongo_db,
+        event_collection,
+        vip_collection=vip_collection,
+        vip_refresh_interval=vip_refresh_interval,
+        aws_key=aws_key,
+        aws_secret=aws_secret
+    )
 
     logger.debug('Running event handler.')
     event_handler.run()

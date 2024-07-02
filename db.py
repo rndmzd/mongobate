@@ -49,11 +49,23 @@ if __name__ == '__main__':
     mongo_db = config.get("MongoDB", "db")
     mongo_collection = config.get("MongoDB", "event_collection")
 
+    aws_key = (
+        config.get("MongoDB", "aws_key")
+        if len(config.get("MongoDB", "aws_key")) > 0
+        else None
+    )
+    aws_secret = (
+        config.get("MongoDB", "aws_secret")
+        if len(config.get("MongoDB", "aws_secret")) > 0
+        else None
+    )
+
     logger.debug('Initializing database handler.')
     db_handler = DBHandler(
         mongo_host, mongo_port, mongo_db, mongo_collection,
         events_api_url=events_api_url,
-        requests_per_minute=requests_per_minute)
+        requests_per_minute=requests_per_minute,
+        aws_key=aws_key, aws_secret=aws_secret)
 
     logger.debug('Running database handler.')
     # Execution blocks here until the DBHandler is stopped.

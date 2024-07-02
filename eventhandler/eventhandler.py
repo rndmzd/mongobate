@@ -5,32 +5,62 @@ import threading
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
+import urllib.parse
+
 logger = logging.getLogger('mongobate.eventhandler.eventhandler')
 logger.setLevel(logging.DEBUG)
 
 
 class EventHandler:
+
     def __init__(
-            self,
-            mongo_host,
-            mongo_port,
-            mongo_db,
-            mongo_collection,
-            vip_collection=None,
-            vip_refresh_interval=300,
-            audio_device=None):
+        self,
+        mongo_host,
+        mongo_port,
+        mongo_db,
+        mongo_collection,
+        vip_collection=None,
+        vip_refresh_interval=300,
+        audio_device=None,
+        aws_key=None,
+        aws_secret=None):
         from .cbevents import CBEvents
-        
+
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()
 
         self.cb_events = CBEvents()
-        
+
+        self.mongo_connection_uri = None
+        if aws_key and aws_secret:
+            aws_key_pe = urllib.parse.quote_plus(aws_key)
+            aws_secret_pe = urllib.parse.quote_plus(aws_secret)
+            mongo_host_pe = urllib.parse.quote_plus(mongo_host)
+            mongo_port_pe = urllib.parse.quote_plus(str(mongo_port))
+
+            # Construct the URI with proper escaping and formatting
+            self.mongo_connection_uri = (
+                f"mongodb://{aws_key_pe}:{aws_secret_pe}@"
+                f"[{mongo_host_pe}]:{mongo_port_pe}/"
+                f"?authMechanism=MONGODB-AWS&authSource=$external"
+            )
+
         try:
-            self.mongo_client = MongoClient(host=mongo_host, port=mongo_port)
+            if self.mongo_connection_uri:
+                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                self.mongo_client = MongoClient(self.mongo_connection_uri)
+            else:
+                self.mongo_client = MongoClient(host=mongo_host, port=mongo_port)
+
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
-            self.vip_collection = self.mongo_db[vip_collection] if 'vip_audio' in self.cb_events.active_components else None
+
+            if "vip_audio" in self.cb_events.active_components:
+                self.vip_collection = (
+                    self.mongo_db[vip_collection] if vip_collection else None
+                )
+            else:
+                self.vip_collection = None
         except ConnectionFailure as e:
             logger.exception("Could not connect to MongoDB:", exc_info=e)
             raise
@@ -45,7 +75,7 @@ class EventHandler:
             self.vip_users = {}
             self.vip_refresh_interval = vip_refresh_interval
             self.load_vip_users()
-    
+
     def load_vip_users(self):
         try:
             vip_users = self.vip_collection.find()
@@ -53,7 +83,7 @@ class EventHandler:
             logger.info(f"Loaded {len(self.vip_users)} VIP users.")
         except Exception as e:
             logger.exception("Error loading VIP users:", exc_info=e)
-    
+
     def vip_refresh_loop(self):
         while not self._stop_event.is_set():
             time.sleep(self.vip_refresh_interval)
@@ -122,7 +152,7 @@ class EventHandler:
         if self.mongo_client:
             logger.info("Closing MongoDB connection...")
             self.mongo_client.close()
-        
+
         logger.info("Clean-up complete.")
 
 if __name__ == "__main__":

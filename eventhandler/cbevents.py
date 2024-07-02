@@ -4,6 +4,8 @@ import logging
 import simplejson as json
 import time
 
+from helpers import MongoJSONEncoder
+
 from . import Actions
 from . import Checks
 
@@ -14,11 +16,11 @@ config = configparser.RawConfigParser()
 config.read("config.ini")
 
 
-class MongoJSONEncoder(json.JSONEncoder):
+"""class MongoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ObjectId):
             return str(obj)
-        return super().default(obj)
+        return super().default(obj)"""
 
 
 class CBEvents:

@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     try:
         while True:
-            time.sleep(0.1)
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         event_handler.stop()

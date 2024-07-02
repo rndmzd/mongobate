@@ -1,4 +1,5 @@
 import logging
+import sys
 from threading import Thread, Event
 
 import pygame
@@ -18,7 +19,7 @@ class AudioPlayer:
         logger.debug(f"device_select_result: {device_select_result}")
         self.play_thread = None
         self.stop_event = Event()
-    
+
     def get_output_devices(self, capture_devices=False):
         init_by_me = not pygame.mixer.get_init()
         if init_by_me:
@@ -38,7 +39,11 @@ class AudioPlayer:
         for i in range(len(output_devices)):
             device_name = output_devices[i]
             print(f"{i+1} => {device_name}")
-        user_selection = int(input(f"\nSelect an audio device (1-{len(output_devices)}): ")) # or press Enter to use the default device: ")
+        try:
+            user_selection = int(input(f"\nSelect an audio device (1-{len(output_devices)}): ")) # or press Enter to use the default device: ")
+        except KeyboardInterrupt:
+            logger.info("User aborted selection. Exiting.")
+            sys.exit()
         logger.debug(f"user_selection: {user_selection}")
         device_num = user_selection - 1
         logger.debug(f"device_num: {device_num}")
@@ -60,7 +65,7 @@ class AudioPlayer:
         if self.play_thread and self.play_thread.is_alive():
             logger.warning("Audio is already playing. Stopping current playback.")
             self.stop_playback()
-        
+
         self.stop_event.clear()
         self.play_thread = Thread(target=self._play_audio_thread, args=(file_path,))
         self.play_thread.start()

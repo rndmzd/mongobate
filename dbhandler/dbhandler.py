@@ -61,7 +61,7 @@ class DBHandler:
                 logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
-                self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port)
+                self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port, directConnection=True)
 
             self.mongo_db = self.mongo_client[self.mongo_db]
             self.event_collection = self.mongo_db[self.mongo_collection]

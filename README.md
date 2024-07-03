@@ -4,7 +4,7 @@
 
 ## TODO
 
-- Config option to switch on/off components
-- Available markets check
+- Audio for VIP users
+- OBS handler for dynamic overlays
 - Private  message alert system
 - Tip to skip song

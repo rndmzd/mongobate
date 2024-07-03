@@ -7,7 +7,7 @@ from pymongo.errors import ConnectionFailure
 
 import urllib.parse
 
-logger = logging.getLogger('mongobate.eventhandler.eventhandler')
+logger = logging.getLogger('mongobate.handlers.eventhandler')
 logger.setLevel(logging.DEBUG)
 
 
@@ -24,7 +24,7 @@ class EventHandler:
         audio_device=None,
         aws_key=None,
         aws_secret=None):
-        from .cbevents import CBEvents
+        from ..helpers.cbevents import CBEvents
 
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()

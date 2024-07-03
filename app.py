@@ -5,7 +5,7 @@ import os
 import sys
 import time
 
-from eventhandler import EventHandler
+from handlers import EventHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
 

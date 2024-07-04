@@ -18,11 +18,15 @@ class CBEvents:
     def __init__(self):
         from . import Actions, Checks
 
-        self.actions = Actions()
         self.checks = Checks()
 
         self.active_components = self.checks.get_active_components()
         logger.info(f"Active Components: {self.active_components}")
+
+        actions_args = {}
+        if 'chat_auto_dj' in self.active_components:
+            actions_args['chatdj'] = True
+        self.actions = Actions(actions_args)
 
         self.vip_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
         logger.debug(f"self.vip_cooldown_seconds: {self.vip_cooldown_seconds}")
@@ -31,7 +35,9 @@ class CBEvents:
         # self.vip_users = {}
         self.vip_audio_directory = config.get("General", "vip_audio_directory")
 
-    def process_event(self, event, vip_users, audio_player):
+        self.command_symbol = config.get("General", "command_symbol")
+
+    def process_event(self, event, privileged_users, audio_player):
         try:
             print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
 
@@ -40,8 +46,8 @@ class CBEvents:
             event_object = event["object"]
             logger.debug(f"event_object: {event_object}")
 
-            # self.vip_users = vip_users
-            # logger.debug(f"self.vip_users: {self.vip_users}")
+            vip_users = privileged_users["vip"]
+            admin_users = privileged_users["admin"]
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
@@ -66,7 +72,7 @@ class CBEvents:
             elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
             elif event_method == "chatMessage":
-                process_result = self.chat_message(event_object)
+                process_result = self.chat_message(event_object, admin_users)
             else:
                 logger.warning(f"Unknown event method: {event_method}")
                 process_result = False
@@ -132,12 +138,10 @@ class CBEvents:
                             logger.error(f"Failed to add song to queue: {song_info}")
                         else:
                             logger.info(f"Song added to queue: {song_info}")
-                        
-            return True
-
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False
+        return True
     
     def broadcast_start(self, event):
         """
@@ -382,7 +386,7 @@ class CBEvents:
             return False
         return True
 
-    def chat_message(self, event):
+    def chat_message(self, event, admin_users):
         """
         {
             "message": {
@@ -403,8 +407,15 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Chat message event received.")
             # Process chat message event
+            logger.info("Chat message event received.")
+
+            if event["user"]["username"] in admin_users:
+                logger.info("Admin user detected.")
+                if self.command_symbol in event["message"]["message"]:
+                    logger.info("Command detected.")
+                    command_string = event["message"]["message"].split(self.command_symbol)[1].split(" ")[0]
+                    logger.debug(f"command_string: {command_string}")
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)
             return False

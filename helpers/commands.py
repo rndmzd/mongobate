@@ -12,10 +12,12 @@ config.read("config.ini")
 
 class Commands:
     def __init__(self):
+        self.commands_file = config.get('General', 'commands_file')
         self.commands = {}
 
     def refresh_commands(self):
-        with open(config.get('General', 'commands_file'), 'r') as yaml_file:
+        logger.debug("Refreshing commands.")
+        with open(self.commands_file, 'r') as yaml_file:
             try:
                 self.commands = yaml.safe_load(yaml_file)
                 return True

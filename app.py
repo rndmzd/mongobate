@@ -46,8 +46,9 @@ if __name__ == '__main__':
     mongo_port = config.getint("MongoDB", "port")
     mongo_db = config.get("MongoDB", "db")
     event_collection = config.get("MongoDB", "event_collection")
-    vip_collection = config.get("MongoDB", "vip_collection")
+    user_collection = config.get("MongoDB", "user_collection")
     vip_refresh_interval = config.getint("General", "vip_refresh_interval")
+    admin_refresh_interval = config.getint("General", "admin_refresh_interval")
 
     aws_key = (
         config.get("MongoDB", "aws_key")
@@ -68,8 +69,9 @@ if __name__ == '__main__':
         mongo_port,
         mongo_db,
         event_collection,
-        vip_collection=vip_collection,
+        user_collection=user_collection,
         vip_refresh_interval=vip_refresh_interval,
+        admin_refresh_interval=admin_refresh_interval,
         aws_key=aws_key,
         aws_secret=aws_secret
     )

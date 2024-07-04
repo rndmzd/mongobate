@@ -1,8 +1,6 @@
 import configparser
 import logging
 
-from chatdj import SongExtractor, AutoDJ
-
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
@@ -10,13 +8,16 @@ config = configparser.RawConfigParser()
 config.read("config.ini")
 
 class Actions:
-    def __init__(self):
-        self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
-        self.auto_dj = AutoDJ(
-            config.get("Spotify", "client_id"),
-            config.get("Spotify", "client_secret"),
-            config.get("Spotify", "redirect_url")
-        )
+    def __init__(self, chatdj=False):
+        if chatdj:
+            from chatdj import SongExtractor, AutoDJ
+
+            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
+            self.auto_dj = AutoDJ(
+                config.get("Spotify", "client_id"),
+                config.get("Spotify", "client_secret"),
+                config.get("Spotify", "redirect_url")
+            )
 
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)

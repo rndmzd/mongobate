@@ -1,7 +1,7 @@
 import configparser
 import logging
 
-logger = logging.getLogger('mongobate.eventhandler.actions')
+logger = logging.getLogger('mongobate.helpers.checks')
 logger.setLevel(logging.DEBUG)
 
 config = configparser.RawConfigParser()

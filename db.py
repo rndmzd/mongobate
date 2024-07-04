@@ -5,7 +5,7 @@ import os
 import sys
 import time
 
-from dbhandler import DBHandler
+from handlers import DBHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
 

@@ -2,9 +2,8 @@ import configparser
 import logging
 
 from chatdj import SongExtractor, AutoDJ
-from chataudio import AudioPlayer
 
-logger = logging.getLogger('mongobate.eventhandler.actions')
+logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
 config = configparser.RawConfigParser()

@@ -5,12 +5,9 @@ import logging
 import simplejson as json
 import time
 
-from helpers import MongoJSONEncoder
+from utils import MongoJSONEncoder
 
-from . import Actions
-from . import Checks
-
-logger = logging.getLogger('mongobate.eventhandler.cbevents')
+logger = logging.getLogger('mongobate.helpers.cbevents')
 logger.setLevel(logging.DEBUG)
 
 config = configparser.RawConfigParser()
@@ -19,6 +16,8 @@ config.read("config.ini")
 
 class CBEvents:
     def __init__(self):
+        from . import Actions, Checks
+
         self.actions = Actions()
         self.checks = Checks()
 

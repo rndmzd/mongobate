@@ -12,7 +12,7 @@ from pymongo.errors import ConnectionFailure
 
 import urllib.parse
 
-logger = logging.getLogger('mongobate.dbhandler.dbhandler')
+logger = logging.getLogger('mongobate.handlers.dbhandler')
 logger.setLevel(logging.DEBUG)
 
 

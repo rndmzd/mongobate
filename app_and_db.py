@@ -7,11 +7,7 @@ import time
 
 from multiprocessing import Event, Process
 
-#from dbhandler.dbhandler import DBHandler
-#from mongobate.eventhandler import EventHandler
-
-from dbhandler import DBHandler
-from eventhandler import EventHandler
+from handlers import DBHandler, EventHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
 

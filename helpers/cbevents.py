@@ -102,9 +102,18 @@ class CBEvents:
             
             ## Chat Auto DJ ##
             if 'chat_auto_dj' in self.active_components:
+                ## Perform checks for tip event items ##
+                logger.info("Checking if skip song request.")
+                if self.checks.is_skip_song_request(event["tip"]["tokens"]):
+                    logger.info("Skip song request detected. Checking current playback state.")
+                    if self.actions.get_playback_state():
+                        logger.info("Playback active. Executing skip song.")
+                        skip_song_result = self.actions.skip_song()
+                        logger.debug(f'skip_song_result: {skip_song_result}')
+
                 logger.info("Checking if song request.")
                 if not self.checks.is_song_request(event["tip"]["tokens"]):
-                    return False
+                    return True
                 logger.info("Song request detected.")
                 request_count = self.checks.get_request_count(event["tip"]["tokens"])
                 logger.info(f"Request count: {request_count}")
@@ -123,11 +132,12 @@ class CBEvents:
                             logger.error(f"Failed to add song to queue: {song_info}")
                         else:
                             logger.info(f"Song added to queue: {song_info}")
+                        
+            return True
 
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False
-        return True
     
     def broadcast_start(self, event):
         """

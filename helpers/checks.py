@@ -10,6 +10,7 @@ config.read("config.ini")
 class Checks:
     def __init__(self):
         self.song_cost = config.getint("General", "song_cost")
+        self.skip_song_cost = config.getint("General", "skip_song_cost")
     
     def get_active_components(self):
         active_components = []
@@ -19,6 +20,11 @@ class Checks:
             if component_val:
                 active_components.append(component)
         return active_components
+    
+    def is_skip_song_request(self, tip_amount):
+        if tip_amount % self.skip_song_cost == 0:
+            return True
+        return False
 
     def is_song_request(self, tip_amount):
         if tip_amount % self.song_cost == 0:

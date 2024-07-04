@@ -154,6 +154,20 @@ class AutoDJ:
             logger.exception("Failed to add song to queue", exc_info=e)
             return False
     
+    def skip_song(self):
+        try:
+            if not self.playback_active():
+                logger.info("Playback is not active.")
+                return True
+            if not self.check_active_devices(device_id=self.playback_device):
+                logger.error("User selected playback device inactive.")
+                return False
+            self.spotify.next_track(device_id=self.playback_device)
+            return True
+        except SpotifyException as e:
+            logger.exception("Failed to skip song", exc_info=e)
+            return False
+    
     def playback_active(self):
         try:
             playback_state = self.spotify.current_playback()

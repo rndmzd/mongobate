@@ -21,6 +21,9 @@ class Actions:
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)
     
+    def get_playback_state(self):
+        return self.auto_dj.playback_active()
+    
     def find_song_spotify(self, song_info):
         tracks = self.auto_dj.find_song(song_info)['tracks']
         logger.debug(f'tracks: {tracks}')
@@ -41,4 +44,9 @@ class Actions:
         return False
     
     def add_song_to_queue(self, uri):
+        logger.debug('Executing add song to queue action helper.')
         return self.auto_dj.add_song_to_queue(uri)
+    
+    def skip_song(self):
+        logger.debug('Executing skip song action helper.')
+        return self.auto_dj.skip_song()

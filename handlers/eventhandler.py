@@ -26,7 +26,7 @@ class EventHandler:
         audio_device=None,
         aws_key=None,
         aws_secret=None):
-        from ..helpers.cbevents import CBEvents
+        from helpers.cbevents import CBEvents
 
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()

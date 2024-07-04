@@ -21,8 +21,9 @@ class EventHandler:
         mongo_port,
         mongo_db,
         mongo_collection,
-        vip_collection=None,
+        user_collection=None,
         vip_refresh_interval=300,
+        admin_refresh_interval=300,
         audio_device=None,
         aws_key=None,
         aws_secret=None):
@@ -62,12 +63,12 @@ class EventHandler:
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
 
-            if "vip_audio" in self.cb_events.active_components:
-                self.vip_collection = (
-                    self.mongo_db[vip_collection] if vip_collection else None
+            if "vip_audio" in self.cb_events.active_components or "command_parser" in self.cb_events.active_components:
+                self.user_collection = (
+                    self.mongo_db[user_collection] if user_collection else None
                 )
             else:
-                self.vip_collection = None
+                self.user_collection = None
         except ConnectionFailure as e:
             logger.exception("Could not connect to MongoDB:", exc_info=e)
             raise
@@ -82,21 +83,45 @@ class EventHandler:
             self.vip_users = {}
             self.vip_refresh_interval = vip_refresh_interval
             self.load_vip_users()
+        
+        if 'command_parser' in self.cb_events.active_components:
+            self.admin_users = {}
+            self.admin_refresh_interval = admin_refresh_interval
+            self.load_admin_users()
 
     def load_vip_users(self):
         try:
-            vip_users = self.vip_collection.find({})
+            vip_users = self.user_collection.find({'vip': True, 'active': True})
             for user in vip_users:
                 logger.debug(f"user: {user}")
                 self.vip_users[user['username']] = user['audio_file']
             logger.info(f"Loaded {len(self.vip_users)} VIP users.")
         except Exception as e:
             logger.exception("Error loading VIP users:", exc_info=e)
+    
+    def load_admin_users(self):
+        try:
+            admin_users = self.user_collection.find({'admin': True, 'active': True})
+            for user in admin_users:
+                logger.debug(f"user: {user}")
+                self.admin_users[user['username']] = True
+            logger.info(f"Loaded {len(self.admin_users)} admin users.")
+        except Exception as e:
+            logger.exception("Error loading admin users:", exc_info=e)
 
-    def vip_refresh_loop(self):
+    def privileged_user_refresh(self):
+        last_load_vip = time.time()
+        last_load_admin = time.time()
         while not self._stop_event.is_set():
-            time.sleep(self.vip_refresh_interval)
+            if time.time() - last_load_vip > self.vip_refresh_interval:
+                self.load_vip_users()
+                last_load_vip = time.time()
+            if time.time() - last_load_admin > self.admin_refresh_interval:
+                self.load_admin_users()
+                last_load_admin = time.time()
             self.load_vip_users()
+
+            time.sleep(1)
 
     def event_processor(self):
         """
@@ -105,7 +130,11 @@ class EventHandler:
         while not self._stop_event.is_set():
             try:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
-                process_result = self.cb_events.process_event(event, self.vip_users, self.audio_player)
+                privileged_users = {
+                    "vip": self.vip_users,
+                    "admin": self.admin_users
+                }
+                process_result = self.cb_events.process_event(event, privileged_users, self.audio_player)
                 logger.debug(f"process_result: {process_result}")
                 self.event_queue.task_done()
             except queue.Empty:
@@ -142,15 +171,15 @@ class EventHandler:
         )
         self.event_thread.start()
 
-        logger.info("Starting VIP refresh thread...")
-        self.vip_refresh_thread = threading.Thread(
-            target=self.vip_refresh_loop, args=(), daemon=True
+        logger.info("Starting admin user refresh thread...")
+        self.privileged_user_refresh_thread = threading.Thread(
+            target=self.privileged_user_refresh, args=(), daemon=True
         )
 
     def stop(self):
         logger.debug("Setting stop event.")
         self._stop_event.set()
-        for thread in [self.watcher_thread, self.event_thread, self.vip_refresh_thread]:
+        for thread in [self.watcher_thread, self.event_thread, self.privileged_user_refresh_thread]:
             if thread.is_alive():
                 logger.debug(f"Joining {thread.name} thread.")
                 thread.join()

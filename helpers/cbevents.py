@@ -16,7 +16,7 @@ config.read("config.ini")
 
 class CBEvents:
     def __init__(self):
-        from . import Actions, Checks
+        from . import Actions, Checks, Commands
 
         self.checks = Checks()
 
@@ -36,6 +36,7 @@ class CBEvents:
         self.vip_audio_directory = config.get("General", "vip_audio_directory")
 
         self.command_symbol = config.get("General", "command_symbol")
+        self.commands = Commands()
 
     def process_event(self, event, privileged_users, audio_player):
         try:
@@ -416,6 +417,8 @@ class CBEvents:
                     logger.info("Command detected.")
                     command_string = event["message"]["message"].split(self.command_symbol)[1].split(" ")[0]
                     logger.debug(f"command_string: {command_string}")
+                    command_result = self.commands.try_command(command_string)
+                    logger.debug(f"command_result: {command_result}")
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)
             return False

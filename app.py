@@ -40,6 +40,8 @@ logger.addHandler(file_handler)
 
 
 if __name__ == '__main__':
+    mongo_username = config.get("MongoDB", "username")
+    mongo_password = config.get("MongoDB", "password")
     mongo_host = config.get("MongoDB", "host")
     mongo_port = config.getint("MongoDB", "port")
     mongo_db = config.get("MongoDB", "db")
@@ -60,6 +62,8 @@ if __name__ == '__main__':
 
     logger.debug('Initializing event handler.')
     event_handler = EventHandler(
+        mongo_username,
+        mongo_password,
         mongo_host,
         mongo_port,
         mongo_db,

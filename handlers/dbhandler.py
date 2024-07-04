@@ -19,6 +19,8 @@ logger.setLevel(logging.DEBUG)
 class DBHandler:
     def __init__(
             self,
+            mongo_username,
+            mongo_password,
             mongo_host,
             mongo_port,
             mongo_db,
@@ -27,10 +29,12 @@ class DBHandler:
             requests_per_minute=1000,
             aws_key=None,
             aws_secret=None):
+        self.mongo_username = mongo_username
+        self.mongo_password = mongo_password
         self.mongo_host = mongo_host
         self.mongo_port = mongo_port
-        self.mongo_db_name = mongo_db
-        self.mongo_collection_name = mongo_collection
+        self.mongo_db = mongo_db
+        self.mongo_collection = mongo_collection
         self.events_api_url = events_api_url
         self.interval = 60 / (requests_per_minute / 10)
 
@@ -38,11 +42,11 @@ class DBHandler:
         self._stop_event = threading.Event()
 
         self.mongo_client = None
-        self.mongo_db = None
-        self.event_collection = None
 
         self.mongo_connection_uri = None
         if aws_key and aws_secret:
+            logger.debug("Using AWS authentication for MongoDB.")
+
             aws_key_pe = urllib.parse.quote_plus(aws_key)
             aws_secret_pe = urllib.parse.quote_plus(aws_secret)
             mongo_host_pe = urllib.parse.quote_plus(mongo_host)
@@ -61,7 +65,12 @@ class DBHandler:
                 logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
-                self.mongo_client = MongoClient(host=self.mongo_host, port=self.mongo_port, directConnection=True)
+                self.mongo_client = MongoClient(
+                    host=self.mongo_host,
+                    port=self.mongo_port,
+                    username=self.mongo_username,
+                    password=self.mongo_password,
+                    directConnection=True)
 
             self.mongo_db = self.mongo_client[self.mongo_db]
             self.event_collection = self.mongo_db[self.mongo_collection]
@@ -152,6 +161,8 @@ if __name__ == "__main__":
         "Events API", "max_requests_per_minute")
 
     db_handler = DBHandler(
+        mongo_username=config.get('MongoDB', 'username'),
+        mongo_password=config.get('MongoDB', 'password'),
         mongo_host=config.get('MongoDB', 'host'),
         mongo_port=config.getint('MongoDB', 'port'),
         mongo_db=config.get('MongoDB', 'db'),

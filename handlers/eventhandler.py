@@ -15,6 +15,8 @@ class EventHandler:
 
     def __init__(
         self,
+        mongo_username,
+        mongo_password,
         mongo_host,
         mongo_port,
         mongo_db,
@@ -50,7 +52,12 @@ class EventHandler:
                 logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
-                self.mongo_client = MongoClient(host=mongo_host, port=mongo_port, directConnection=True)
+                self.mongo_client = MongoClient(
+                    host=mongo_host,
+                    port=mongo_port,
+                    username=mongo_username,
+                    password=mongo_password,
+                    directConnection=True)
 
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
@@ -165,6 +172,8 @@ if __name__ == "__main__":
     config.read("config.ini")
 
     event_handler = EventHandler(
+        mongo_username=config.get('MongoDB', 'username'),
+        mongo_password=config.get('MongoDB', 'password'),
         mongo_host=config.get('MongoDB', 'host'),
         mongo_port=config.getint('MongoDB', 'port'),
         mongo_db=config.get('MongoDB', 'db'),

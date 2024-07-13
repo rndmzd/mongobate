@@ -39,8 +39,7 @@ class Actions:
             logger.debug(f"Cache hit for {cache_key}")
             return self._song_cache[cache_key]
         
-        query = f"{song_info['artist']} {song_info['song']}"
-        tracks = self.auto_dj.find_song({'song': query})['tracks']
+        tracks = self.auto_dj.find_song(song_info)['tracks']
         logger.debug(f'tracks: {tracks}')
         if not tracks or not tracks['items']:
             logger.warning(f'No tracks found for {song_info}')

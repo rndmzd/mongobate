@@ -76,9 +76,9 @@ class AutoDJ:
     def find_song(self, song_info):
         """Search Spotify for a specific song."""
         try:
-            find_song_query = f"{song_info['artist']} - {song_info['song']}"
+            find_song_query = f"{song_info['artist']} {song_info['song']}"
             logger.debug(f'find_song_query: {find_song_query}')
-            results = self.spotify.search(q=find_song_query, type='track', limit=1)
+            results = self.spotify.search(q=find_song_query, type='track')#, limit=1)
             logger.debug(f'results: {results}')
             return results
         except SpotifyException as e:

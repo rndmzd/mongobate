@@ -22,14 +22,23 @@ class Actions:
                 config.get("Spotify", "redirect_url")
             )
 
+            self._song_cache = {}
+    
+    def _cache_key(self, song_info):
+        return f"{song_info['artist']}:{song_info['song']}"
+
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)
     
     def get_playback_state(self):
         return self.auto_dj.playback_active()
     
-    @lru_cache(maxsize=100)
     def find_song_spotify(self, song_info):
+        cache_key = self._cache_key(song_info)
+        if cache_key in self._song_cache:
+            logger.debug(f"Cache hit for {cache_key}")
+            return self._song_cache[cache_key]
+        
         query = f"{song_info['artist']} {song_info['song']}"
         tracks = self.auto_dj.find_song({'song': query})['tracks']
         logger.debug(f'tracks: {tracks}')
@@ -62,6 +71,12 @@ class Actions:
         optimized_results = [song_info for (matched_string, song_info, score) in best_matches]
         
         logger.debug(f'Fuzzy match results: {optimized_results}')
+
+        self._song_cache[cache_key] = optimized_results
+        
+        # Limit cache size to prevent memory issues
+        if len(self._song_cache) > 1000:
+            self._song_cache.pop(next(iter(self._song_cache)))
 
         return optimized_results[0]['uri']
     

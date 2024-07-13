@@ -1,6 +1,8 @@
 import configparser
 import logging
 
+from rapidfuzz import fuzz
+
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
@@ -29,9 +31,24 @@ class Actions:
         tracks = self.auto_dj.find_song(song_info)['tracks']
         logger.debug(f'tracks: {tracks}')
         if tracks:
-            top_result = tracks['items'][0]
-            logger.debug(f'top_result: {top_result}')
-            return top_result['uri']
+            results = []
+            for track in tracks['items'][:5]:  # Get top 5 results
+                artist_name = track['artists'][0]['name']
+                song_name = track['name']
+                artist_ratio = fuzz.ratio(song_info['artist'].lower(), artist_name.lower())
+                song_ratio = fuzz.ratio(song_info['song'].lower(), song_name.lower())
+                average_ratio = (artist_ratio + song_ratio) / 2
+                results.append({
+                    'uri': track['uri'],
+                    'artist': artist_name,
+                    'song': song_name,
+                    'match_ratio': average_ratio
+                })
+            
+            # Sort results by match ratio in descending order
+            results.sort(key=lambda x: x['match_ratio'], reverse=True)
+            logger.debug(f'Fuzzy match results: {results}')
+            return results[0]['uri']
         logger.warning(f'No tracks found for {song_info}')
         return None
     

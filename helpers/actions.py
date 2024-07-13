@@ -26,6 +26,21 @@ class Actions:
     
     def _cache_key(self, song_info):
         return f"{song_info['artist']}:{song_info['song']}"
+    
+    def _custom_score(self, query_artist, query_song, result_artist, result_song):
+        artist_ratio = fuzz.ratio(query_artist.lower(), result_artist.lower())
+        song_ratio = fuzz.ratio(query_song.lower(), result_song.lower())
+        
+        # Heavily weight exact artist matches
+        if artist_ratio == 100:
+            artist_score = 100
+        else:
+            artist_score = artist_ratio * 0.5  # Reduce weight of non-exact artist matches
+        
+        # Combine scores, prioritizing artist match
+        combined_score = (artist_score * 0.7) + (song_ratio * 0.3)
+        
+        return combined_score
 
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)
@@ -46,36 +61,32 @@ class Actions:
             return None
 
         results = []
-        for track in tracks['items'][:10]:
+        for track in tracks['items'][:20]:  # Increased to top 20 results for better coverage
             artist_name = track['artists'][0]['name']
             song_name = track['name']
             
-            combined_ratio = fuzz.WRatio(f"{song_info['artist']} {song_info['song']}",
-                                         f"{artist_name} {song_name}")
+            score = self._custom_score(song_info['artist'], song_info['song'], artist_name, song_name)
             
             results.append({
                 'uri': track['uri'],
                 'artist': artist_name,
                 'song': song_name,
-                'match_ratio': combined_ratio
+                'match_ratio': score
             })
         
-        best_matches = process.extract(
-            f"{song_info['artist']} {song_info['song']}",
-            [(r['artist'] + ' ' + r['song'], r) for r in results],
-            limit=5,
-            scorer=fuzz.WRatio
-        )
+        # Sort results by our custom score
+        optimized_results = sorted(results, key=lambda x: x['match_ratio'], reverse=True)[:5]
         
-        optimized_results = [song_info for (matched_string, song_info, score) in best_matches]
-        
-        logger.debug(f'Fuzzy match results: {optimized_results}')
+        logger.debug(f'Custom match results: {optimized_results}')
 
+        # Cache the results
         self._song_cache[cache_key] = optimized_results
         
         # Limit cache size to prevent memory issues
         if len(self._song_cache) > 1000:
             self._song_cache.pop(next(iter(self._song_cache)))
+
+        # return optimized_results
 
         return optimized_results[0]['uri']
     

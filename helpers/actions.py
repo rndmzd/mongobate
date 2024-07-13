@@ -1,7 +1,8 @@
 import configparser
 import logging
+from functools import lru_cache
 
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
@@ -27,30 +28,42 @@ class Actions:
     def get_playback_state(self):
         return self.auto_dj.playback_active()
     
+    @lru_cache(maxsize=100)
     def find_song_spotify(self, song_info):
-        tracks = self.auto_dj.find_song(song_info)['tracks']
+        query = f"{song_info['artist']} {song_info['song']}"
+        tracks = self.auto_dj.find_song({'song': query})['tracks']
         logger.debug(f'tracks: {tracks}')
-        if tracks:
-            results = []
-            for track in tracks['items'][:5]:  # Get top 5 results
-                artist_name = track['artists'][0]['name']
-                song_name = track['name']
-                artist_ratio = fuzz.ratio(song_info['artist'].lower(), artist_name.lower())
-                song_ratio = fuzz.ratio(song_info['song'].lower(), song_name.lower())
-                average_ratio = (artist_ratio + song_ratio) / 2
-                results.append({
-                    'uri': track['uri'],
-                    'artist': artist_name,
-                    'song': song_name,
-                    'match_ratio': average_ratio
-                })
+        if not tracks or not tracks['items']:
+            logger.warning(f'No tracks found for {song_info}')
+            return None
+
+        results = []
+        for track in tracks['items'][:10]:
+            artist_name = track['artists'][0]['name']
+            song_name = track['name']
             
-            # Sort results by match ratio in descending order
-            results.sort(key=lambda x: x['match_ratio'], reverse=True)
-            logger.debug(f'Fuzzy match results: {results}')
-            return results[0]['uri']
-        logger.warning(f'No tracks found for {song_info}')
-        return None
+            combined_ratio = fuzz.WRatio(f"{song_info['artist']} {song_info['song']}",
+                                         f"{artist_name} {song_name}")
+            
+            results.append({
+                'uri': track['uri'],
+                'artist': artist_name,
+                'song': song_name,
+                'match_ratio': combined_ratio
+            })
+        
+        best_matches = process.extract(
+            f"{song_info['artist']} {song_info['song']}",
+            [(r['artist'] + ' ' + r['song'], r) for r in results],
+            limit=5,
+            scorer=fuzz.WRatio
+        )
+        
+        optimized_results = [song_info for (matched_string, song_info, score) in best_matches]
+        
+        logger.debug(f'Fuzzy match results: {optimized_results}')
+
+        return optimized_results[0]['uri']
     
     def available_in_market(self, song_uri):
         user_market = self.auto_dj.get_user_market()

@@ -57,6 +57,9 @@ class AutoDJ:
             logger.exception("Spotify playback device selection failed", exc_info=e)
             raise
 
+        self.queued_tracks = []
+        self.queue_active = False
+
     def check_active_devices(self, device_id=None):
         try:
             devices = self.spotify.devices()
@@ -116,12 +119,12 @@ class AutoDJ:
     ## TODO: Check if this is functions correctly
     def queue_length(self):
         try:
-            spotify_queue = self.spotify.queue()
+            """spotify_queue = self.spotify.queue()
             queue_length = len(spotify_queue['queue'])
             if spotify_queue['currently_playing']:
                 queue_length += 1
-            logger.debug(f"queue_length: {queue_length}")
-            return queue_length
+            logger.debug(f"queue_length: {queue_length}")"""
+            return len(self.queued_tracks)
         except SpotifyException as e:
             logger.exception("Failed to get queue length", exc_info=e)
             return None
@@ -132,26 +135,72 @@ class AutoDJ:
                 logger.info("Playback device inactive. Transferring playback to device.")
                 self.spotify.transfer_playback(device_id=self.playback_device, force_play=False)
 
+            if not self.queue_active:
+                # This is the first song we're queuing in this session
+                self.queue_active = True
+                self.queued_tracks = []
+
             logger.info("Adding song to active playback queue.")
             self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
+            self.queued_tracks.append(track_uri)
 
-            playback_state = self.spotify.current_playback()
-            logger.debug(f"playback_state: {playback_state}")
-
-            if self.playback_active():
-                return True
-            
-            ## TODO: Check if this is necessary
-            logger.info("Skipping to next track.")
-            self.spotify.next_track(device_id=self.playback_device)
-
-            logger.info("Starting playback.")
-            self.spotify.start_playback(device_id=self.playback_device)
+            if not self.playback_active():
+                logger.info("Starting playback.")
+                self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
+                self.queued_tracks.pop(0)  # Remove the first track as it's now playing
 
             return True
             
         except SpotifyException as e:
             logger.exception("Failed to add song to queue", exc_info=e)
+            return False
+    
+    def check_queue_end(self):
+        try:
+            if not self.queue_active:
+                return False
+
+            playback_state = self.spotify.current_playback()
+            if not playback_state or not playback_state['is_playing']:
+                # Playback has stopped
+                if not self.queued_tracks:
+                    logger.info("Reached the end of queued songs. Clearing context.")
+                    self.clear_playback_context()
+                    return True
+            elif playback_state['item']:
+                current_track_uri = playback_state['item']['uri']
+                if self.queued_tracks and current_track_uri == self.queued_tracks[0]:
+                    self.queued_tracks.pop(0)
+                elif not self.queued_tracks:
+                    logger.info("Playing unqueued track. Clearing context.")
+                    self.clear_playback_context()
+                    return True
+            return False
+        except SpotifyException as e:
+            logger.exception("Failed to check queue end", exc_info=e)
+            return False
+
+    def clear_playback_context(self):
+        try:
+            logger.info("Clearing the playback context.")
+            # Stop playback
+            self.spotify.pause_playback(device_id=self.playback_device)
+            # Clear queue by starting and immediately pausing a silent track
+            silent_track_uri = "spotify:track:1q0oo1RZ8YBWlhGQ7kA1uq"  # URI of a silent track
+            self.spotify.start_playback(device_id=self.playback_device, uris=[silent_track_uri])
+            self.spotify.pause_playback(device_id=self.playback_device)
+            # Reset our queue tracking
+            self.queued_tracks = []
+            self.queue_active = False
+        except SpotifyException as e:
+            logger.exception("Failed to clear playback context", exc_info=e)
+    
+    def playback_active(self):
+        try:
+            playback_state = self.spotify.current_playback()
+            return playback_state and playback_state['is_playing']
+        except SpotifyException as e:
+            logger.exception("Failed to check if playback is active", exc_info=e)
             return False
     
     def skip_song(self):
@@ -166,15 +215,4 @@ class AutoDJ:
             return True
         except SpotifyException as e:
             logger.exception("Failed to skip song", exc_info=e)
-            return False
-    
-    def playback_active(self):
-        try:
-            playback_state = self.spotify.current_playback()
-            logger.debug(f"playback_state: {playback_state}")
-            if not playback_state or not playback_state['is_playing']:
-                return False
-            return True
-        except SpotifyException as e:
-            logger.exception("Failed to check if song is playing", exc_info=e)
             return False

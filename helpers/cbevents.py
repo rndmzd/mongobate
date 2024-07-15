@@ -3,6 +3,7 @@ import datetime
 from bson import ObjectId
 import logging
 import simplejson as json
+import threading
 import time
 
 from utils import MongoJSONEncoder
@@ -26,17 +27,17 @@ class CBEvents:
         actions_args = {}
         if 'chat_auto_dj' in self.active_components:
             actions_args['chatdj'] = True
+        if 'vip_audio' in self.active_components:
+            actions_args['vip_audio'] = True
+            self.vip_audio_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
+            logger.debug(f"self.vip_audio_cooldown_seconds: {self.vip_audio_cooldown_seconds}")
+            self.vip_cooldown = {}
+            self.vip_audio_directory = config.get("General", "vip_audio_directory")
+        if 'command_parser' in self.active_components:
+            actions_args['command_parser'] = True
+            self.commands = Commands()
+
         self.actions = Actions(actions_args)
-
-        self.vip_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
-        logger.debug(f"self.vip_cooldown_seconds: {self.vip_cooldown_seconds}")
-
-        self.vip_cooldown = {}
-        # self.vip_users = {}
-        self.vip_audio_directory = config.get("General", "vip_audio_directory")
-
-        self.command_symbol = config.get("General", "command_symbol")
-        self.commands = Commands()
 
     def process_event(self, event, privileged_users, audio_player):
         try:
@@ -139,10 +140,12 @@ class CBEvents:
                             logger.error(f"Failed to add song to queue: {song_info}")
                         else:
                             logger.info(f"Song added to queue: {song_info}")
+                            if not self.actions.queue_check_thread or not self.actions.queue_check_thread.is_alive():
+                                self.actions.start_queue_check()
+            return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
             return False
-        return True
     
     def broadcast_start(self, event):
         """
@@ -159,12 +162,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Broadcast start event received.")
             # Process broadcast start event
+            logger.info("Broadcast start event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing broadcast start event", exc_info=e)
             return False
-        return True
     
     def broadcast_stop(self, event):
         """
@@ -181,12 +184,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Broadcast stop event received.")
             # Process broadcast stop event
+            logger.info("Broadcast stop event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing broadcast stop event", exc_info=e)
             return False
-        return True
     
     def fanclub_join(self, event):
         """
@@ -203,12 +206,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Fanclub join event received.")
             # Process fanclub join event
+            logger.info("Fanclub join event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing fanclub join event", exc_info=e)
             return False
-        return True
     
     def private_message(self, event):
         """
@@ -233,12 +236,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Private message event received.")
             # Process private message event
+            logger.info("Private message event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing private message event", exc_info=e)
             return False
-        return True
     
     def room_subject_change(self, event):
         """
@@ -248,12 +251,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Room subject change event received.")
             # Process room subject change event
+            logger.info("Room subject change event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing room subject change event", exc_info=e)
             return False
-        return True
     
     def user_enter(self, event, vip_users, audio_player):
         """
@@ -278,7 +281,7 @@ class CBEvents:
                 if username in vip_users.keys():
                     logger.info(f"VIP user {username} entered the room.")
                     current_time = time.time()
-                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_cooldown_seconds:
+                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_audio_cooldown_seconds:
                         logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
                         audio_file = vip_users[username]
                         logger.debug(f"audio_file: {audio_file}")
@@ -288,10 +291,10 @@ class CBEvents:
                         audio_player.play_audio(audio_file_path)
                         logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
                         self.vip_cooldown[username] = current_time
+            return True
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)
             return False
-        return True
     
     def user_leave(self, event):
         """
@@ -308,12 +311,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("User leave event received.")
             # Process user leave event
+            logger.info("User leave event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing user leave event", exc_info=e)
             return False
-        return True
     
     def follow(self, event):
         """
@@ -330,12 +333,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Follow event received.")
             # Process follow event
+            logger.info("Follow event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing follow event", exc_info=e)
             return False
-        return True
 
     def unfollow(self, event):
         """
@@ -352,12 +355,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Unfollow event received.")
             # Process unfollow event
+            logger.info("Unfollow event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing unfollow event", exc_info=e)
             return False
-        return True
 
     def media_purchase(self, event):
         """
@@ -380,12 +383,12 @@ class CBEvents:
         }
         """
         try:
-            logger.info("Media purchase event received.")
             # Process media purchase event
+            logger.info("Media purchase event received.")
+            return True
         except Exception as e:
             logger.exception("Error processing media purchase event", exc_info=e)
             return False
-        return True
 
     def chat_message(self, event, admin_users):
         """
@@ -411,16 +414,16 @@ class CBEvents:
             # Process chat message event
             logger.info("Chat message event received.")
 
-            if event["user"]["username"] in admin_users:
-                logger.info("Admin user detected.")
-                if self.command_symbol in event["message"]["message"]:
-                    logger.info("Command detected.")
-                    command_string = event["message"]["message"].split(self.command_symbol)[1].split(" ")[0]
-                    logger.debug(f"command_string: {command_string}")
-                    command_result = self.commands.try_command(command_string)
-                    logger.debug(f"command_result: {command_result}")
+            if 'command_parser' in self.active_components:
+                if event["user"]["username"] in admin_users:
+                    logger.info(f"Admin message: {event['message']['message']}")
+                    command = self.checks.get_command(event["message"]["message"])
+                    if command:
+                        logger.info("Trying command: {command}")
+                        command_result = self.commands.try_command(command)
+                        logger.debug(f"command_result: {command_result}")
+            return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)
             return False
-        return True
     

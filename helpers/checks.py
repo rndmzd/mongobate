@@ -11,6 +11,7 @@ class Checks:
     def __init__(self):
         self.song_cost = config.getint("General", "song_cost")
         self.skip_song_cost = config.getint("General", "skip_song_cost")
+        self.command_symbol = config.get("General", "command_symbol")
     
     def get_active_components(self):
         active_components = []
@@ -33,3 +34,13 @@ class Checks:
     
     def get_request_count(self, tip_amount):
         return tip_amount // self.song_cost
+    
+    def get_command(self, message):
+        if message.startswith(self.command_symbol):
+            command_elements = message.lstrip(self.command_symbol).split(" ")
+            command = {
+                "command": command_elements[0],
+                "args": command_elements[1:] if len(command_elements) > 1 else []
+            }
+            return command
+        return None

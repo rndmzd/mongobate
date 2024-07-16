@@ -30,11 +30,11 @@ class Commands:
         logger.debug(f"command: {command}")
         if not self.refresh_commands():
             return False
-        if command not in self.commands:
-            logger.warning(f'Unrecognized command: {command}.')
+        if command['command'] not in self.commands:
+            logger.warning(f"Unrecognized command: {command['command']}.")
             return False
         # PROCESS COMMAND HERE
         ## TODO: User management commands, WTFU command?
-        logger.debug(f"self.commands[command]: {self.commands[command]}")
+        logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
         return True
         

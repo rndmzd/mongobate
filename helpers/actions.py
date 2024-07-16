@@ -1,5 +1,10 @@
 import configparser
 import logging
+from functools import lru_cache
+import threading
+import time
+
+from rapidfuzz import fuzz
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
@@ -8,7 +13,7 @@ config = configparser.RawConfigParser()
 config.read("config.ini")
 
 class Actions:
-    def __init__(self, chatdj=False):
+    def __init__(self, chatdj=False, vip_audio=False, command_parser=False):
         if chatdj:
             from chatdj import SongExtractor, AutoDJ
 
@@ -19,6 +24,26 @@ class Actions:
                 config.get("Spotify", "redirect_url")
             )
 
+            self._song_cache = {}
+    
+    def _cache_key(self, song_info):
+        return f"{song_info['artist']}:{song_info['song']}"
+    
+    def _custom_score(self, query_artist, query_song, result_artist, result_song):
+        artist_ratio = fuzz.ratio(query_artist.lower(), result_artist.lower())
+        song_ratio = fuzz.ratio(query_song.lower(), result_song.lower())
+        
+        # Heavily weight exact artist matches
+        if artist_ratio == 100:
+            artist_score = 100
+        else:
+            artist_score = artist_ratio * 0.5  # Reduce weight of non-exact artist matches
+        
+        # Combine scores, prioritizing artist match
+        combined_score = (artist_score * 0.7) + (song_ratio * 0.3)
+        
+        return combined_score
+
     def extract_song_titles(self, message, song_count):
         return self.song_extractor.find_titles(message, song_count)
     
@@ -26,14 +51,45 @@ class Actions:
         return self.auto_dj.playback_active()
     
     def find_song_spotify(self, song_info):
+        cache_key = self._cache_key(song_info)
+        if cache_key in self._song_cache:
+            logger.debug(f"Cache hit for {cache_key}")
+            return self._song_cache[cache_key]
+        
         tracks = self.auto_dj.find_song(song_info)['tracks']
         logger.debug(f'tracks: {tracks}')
-        if tracks:
-            top_result = tracks['items'][0]
-            logger.debug(f'top_result: {top_result}')
-            return top_result['uri']
-        logger.warning(f'No tracks found for {song_info}')
-        return None
+        if not tracks or not tracks['items']:
+            logger.warning(f'No tracks found for {song_info}')
+            return None
+
+        results = []
+        for track in tracks['items'][:20]:  # Increased to top 20 results for better coverage
+            artist_name = track['artists'][0]['name']
+            song_name = track['name']
+            
+            score = self._custom_score(song_info['artist'], song_info['song'], artist_name, song_name)
+            
+            results.append({
+                'uri': track['uri'],
+                'artist': artist_name,
+                'song': song_name,
+                'match_ratio': score
+            })
+        
+        # Sort results by our custom score
+        optimized_results = sorted(results, key=lambda x: x['match_ratio'], reverse=True)[:5]
+        
+        logger.debug(f'Custom match results: {optimized_results}')
+
+        # Cache the results
+        self._song_cache[cache_key] = optimized_results
+        
+        # Limit cache size to prevent memory issues
+        if len(self._song_cache) > 1000:
+            self._song_cache.pop(next(iter(self._song_cache)))
+
+        # return optimized_results
+        return optimized_results[0]['uri']
     
     def available_in_market(self, song_uri):
         user_market = self.auto_dj.get_user_market()

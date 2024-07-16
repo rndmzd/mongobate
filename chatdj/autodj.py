@@ -50,6 +50,8 @@ class AutoDJ:
                     break
                 logger.info("Activating selected playback device.")
                 self.spotify.transfer_playback(device_id=self.playback_device, force_play=False)
+
+                self.clear_playback_context()
             except KeyboardInterrupt:
                 logger.info('User aborted selection. Exiting.')
                 sys.exit()
@@ -76,9 +78,9 @@ class AutoDJ:
     def find_song(self, song_info):
         """Search Spotify for a specific song."""
         try:
-            find_song_query = f"{song_info['artist']} - {song_info['song']}"
+            find_song_query = f"{song_info['artist']} {song_info['song']}"
             logger.debug(f'find_song_query: {find_song_query}')
-            results = self.spotify.search(q=find_song_query, type='track', limit=1)
+            results = self.spotify.search(q=find_song_query, type='track')#, limit=1)
             logger.debug(f'results: {results}')
             return results
         except SpotifyException as e:
@@ -121,7 +123,6 @@ class AutoDJ:
             if spotify_queue['currently_playing']:
                 queue_length += 1
             logger.debug(f"queue_length: {queue_length}")
-            return queue_length
         except SpotifyException as e:
             logger.exception("Failed to get queue length", exc_info=e)
             return None
@@ -135,23 +136,32 @@ class AutoDJ:
             logger.info("Adding song to active playback queue.")
             self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
 
-            playback_state = self.spotify.current_playback()
-            logger.debug(f"playback_state: {playback_state}")
-
-            if self.playback_active():
-                return True
-            
-            ## TODO: Check if this is necessary
-            logger.info("Skipping to next track.")
-            self.spotify.next_track(device_id=self.playback_device)
-
-            logger.info("Starting playback.")
-            self.spotify.start_playback(device_id=self.playback_device)
+            if not self.playback_active():
+                logger.info("Starting playback.")
+                self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
 
             return True
             
         except SpotifyException as e:
             logger.exception("Failed to add song to queue", exc_info=e)
+            return False
+
+    def clear_playback_context(self):
+        try:
+            logger.info("Clearing the playback context.")
+            # Clear queue by starting and immediately pausing a silent track
+            silent_track_uri = "spotify:track:1q0oo1RZ8YBWlhGQ7kA1uq"  # URI of a silent track
+            self.spotify.start_playback(device_id=self.playback_device, uris=[silent_track_uri])
+            self.spotify.pause_playback(device_id=self.playback_device)
+        except SpotifyException as e:
+            logger.exception("Failed to clear playback context", exc_info=e)
+    
+    def playback_active(self):
+        try:
+            playback_state = self.spotify.current_playback()
+            return playback_state and playback_state['is_playing']
+        except SpotifyException as e:
+            logger.exception("Failed to check if playback is active", exc_info=e)
             return False
     
     def skip_song(self):
@@ -166,15 +176,4 @@ class AutoDJ:
             return True
         except SpotifyException as e:
             logger.exception("Failed to skip song", exc_info=e)
-            return False
-    
-    def playback_active(self):
-        try:
-            playback_state = self.spotify.current_playback()
-            logger.debug(f"playback_state: {playback_state}")
-            if not playback_state or not playback_state['is_playing']:
-                return False
-            return True
-        except SpotifyException as e:
-            logger.exception("Failed to check if song is playing", exc_info=e)
             return False

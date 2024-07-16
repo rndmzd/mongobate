@@ -25,11 +25,6 @@ class Actions:
             )
 
             self._song_cache = {}
-
-            self.queue_check_thread = None
-            self.stop_queue_check = threading.Event()
-
-            self.start_queue_check()
     
     def _cache_key(self, song_info):
         return f"{song_info['artist']}:{song_info['song']}"
@@ -108,29 +103,6 @@ class Actions:
     def add_song_to_queue(self, uri):
         logger.debug('Executing add song to queue action helper.')
         return self.auto_dj.add_song_to_queue(uri)
-    
-    def start_queue_check(self):
-        if self.queue_check_thread is None or not self.queue_check_thread.is_alive():
-            logger.debug("Clearning stop queue check event.")
-            self.stop_queue_check.clear()
-            self.queue_check_thread = threading.Thread(target=self.queue_check_loop)
-            logger.debug("Starting queue check thread.")
-            self.queue_check_thread.start()
-            logger.info("Queue check thread started.")
-
-    def stop_queue_check(self):
-        if self.queue_check_thread and self.queue_check_thread.is_alive():
-            logger.info("Stopping queue check thread.")
-            self.stop_queue_check.set()
-            logger.debug("Joining queue check thread.")
-            self.queue_check_thread.join()
-            logger.info("Queue check thread stopped.")
-
-    def queue_check_loop(self):
-        while not self.stop_queue_check.is_set():
-            if self.auto_dj.check_queue_end():
-                logger.info("Queue playback ended and cleared.")
-            time.sleep(5)
     
     def skip_song(self):
         logger.debug('Executing skip song action helper.')

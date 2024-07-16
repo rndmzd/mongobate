@@ -140,8 +140,6 @@ class CBEvents:
                             logger.error(f"Failed to add song to queue: {song_info}")
                         else:
                             logger.info(f"Song added to queue: {song_info}")
-                            if not self.actions.queue_check_thread or not self.actions.queue_check_thread.is_alive():
-                                self.actions.start_queue_check()
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)

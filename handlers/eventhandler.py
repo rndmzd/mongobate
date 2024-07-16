@@ -1,6 +1,7 @@
 import logging
 import queue
 import threading
+import time
 
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
@@ -119,7 +120,6 @@ class EventHandler:
             if time.time() - last_load_admin > self.admin_refresh_interval:
                 self.load_admin_users()
                 last_load_admin = time.time()
-            self.load_vip_users()
 
             time.sleep(1)
 
@@ -175,6 +175,7 @@ class EventHandler:
         self.privileged_user_refresh_thread = threading.Thread(
             target=self.privileged_user_refresh, args=(), daemon=True
         )
+        self.privileged_user_refresh_thread.start()
 
     def stop(self):
         logger.debug("Setting stop event.")

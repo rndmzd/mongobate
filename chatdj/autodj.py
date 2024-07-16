@@ -183,8 +183,6 @@ class AutoDJ:
     def clear_playback_context(self):
         try:
             logger.info("Clearing the playback context.")
-            # Stop playback
-            self.spotify.pause_playback(device_id=self.playback_device)
             # Clear queue by starting and immediately pausing a silent track
             silent_track_uri = "spotify:track:1q0oo1RZ8YBWlhGQ7kA1uq"  # URI of a silent track
             self.spotify.start_playback(device_id=self.playback_device, uris=[silent_track_uri])

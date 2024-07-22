@@ -106,20 +106,14 @@ class AutoDJ:
             logger.exception("Failed to select playback device", exc_info=e)
             raise
 
-    def find_song(self, song_info: Dict[str, str]) -> Optional[str]:
+    def find_song(self, song_info):
+        """Search Spotify for a specific song."""
         try:
-            query = f"{song_info['artist']} {song_info['song']}"
-            logger.debug(f'Search query: {query}')
-            results = self.spotify.search(q=query, type='track', limit=1)
-            
-            if results['tracks']['items']:
-                track = results['tracks']['items'][0]
-                logger.info(f"Found track: {track['name']} by {track['artists'][0]['name']}")
-                return track['uri']
-            else:
-                logger.warning(f"No tracks found for {song_info}")
-                return None
-
+            find_song_query = f"{song_info['artist']} {song_info['song']}"
+            logger.debug(f'find_song_query: {find_song_query}')
+            results = self.spotify.search(q=find_song_query, type='track')#, limit=1)
+            logger.debug(f'results: {results}')
+            return results
         except SpotifyException as e:
             logger.exception("Failed to find song", exc_info=e)
             return None

@@ -90,7 +90,7 @@ class Actions:
             return cached_song['optimized_results'][0]['uri']
 
         try:
-            tracks = self.auto_dj.find_song(song_info)
+            tracks = self.auto_dj.find_song(song_info)['tracks']
             if not tracks or not tracks['items']:
                 logger.warning(f'No tracks found for {song_info}')
                 return None

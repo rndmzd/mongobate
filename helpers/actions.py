@@ -1,8 +1,5 @@
 import configparser
 import logging
-from functools import lru_cache
-import threading
-import time
 
 from rapidfuzz import fuzz
 
@@ -31,16 +28,20 @@ class Actions:
     
     def _custom_score(self, query_artist, query_song, result_artist, result_song):
         artist_ratio = fuzz.ratio(query_artist.lower(), result_artist.lower())
+        logger.debug(f'artist_ratio: {artist_ratio}')
         song_ratio = fuzz.ratio(query_song.lower(), result_song.lower())
+        logger.debug(f'song_ratio: {song_ratio}')
         
         # Heavily weight exact artist matches
         if artist_ratio == 100:
             artist_score = 100
         else:
             artist_score = artist_ratio * 0.5  # Reduce weight of non-exact artist matches
+        logger.debug(f'artist_score: {artist_score}')
         
         # Combine scores, prioritizing artist match
         combined_score = (artist_score * 0.7) + (song_ratio * 0.3)
+        logger.debug(f'combined_score: {combined_score}')
         
         return combined_score
 

@@ -27,7 +27,7 @@ class Actions:
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
         try:
-            cached_song = self.song_cache_collection.find_one({'artist': song_info['artist'], 'song': song_info['song']})
+            cached_song = self.song_cache_collection.find_one({'artist': song_info['artist'].lower(), 'song': song_info['song'].lower()})
             logger.debug(f'Cached song: {cached_song}')
             return cached_song
         except Exception as e:
@@ -38,8 +38,8 @@ class Actions:
         """Cache a song and its optimized results in MongoDB."""
         try:
             doc = {
-                'artist': song_info['artist'],
-                'song': song_info['song'],
+                'artist': song_info['artist'].lower(),
+                'song': song_info['song'].lower(),
                 'optimized_results': optimized_results
             }
             inserted_id = self.song_cache_collection.insert_one(doc).inserted_id

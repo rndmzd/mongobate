@@ -1,4 +1,4 @@
-import configparser
+#import configparser
 import logging
 
 from rapidfuzz import fuzz
@@ -6,13 +6,14 @@ from rapidfuzz import fuzz
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
-config = configparser.RawConfigParser()
-config.read("config.ini")
+#config = configparser.RawConfigParser()
+#config.read("config.ini")
 
 class Actions:
     def __init__(self, chatdj=False, vip_audio=False, command_parser=False):
         if chatdj:
             from chatdj import SongExtractor, AutoDJ
+            from . import config, song_cache_collection
 
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
@@ -21,10 +22,28 @@ class Actions:
                 config.get("Spotify", "redirect_url")
             )
 
-            self._song_cache = {}
+            self.song_cache_collection = song_cache_collection
     
     def _cache_key(self, song_info):
         return f"{song_info['artist']}:{song_info['song']}"
+    
+    def get_cached_song(self, song_info):
+        cached_song = self.song_cache_collection.find_one({'artist': song_info['artist'], 'song': song_info['song']})
+        logger.debug(f'cache_key: {cached_song}')
+    
+    def cache_song(self, song_info, optimized_results):
+        try:
+            doc = {
+                'artist': song_info['artist'],
+                'song': song_info['song'],
+                'optimized_results': optimized_results
+            }
+            inserted_id = self.song_cache_collection.insert_one(doc).inserted_id
+            logger.debug(f'inserted_id: {inserted_id}')
+            return True
+        except Exception as e:
+            logger.exception('Failed to save cached song', exc_info=e)
+            return False
     
     def _custom_score(self, query_artist, query_song, result_artist, result_song):
         artist_ratio = fuzz.ratio(query_artist.lower(), result_artist.lower())
@@ -52,12 +71,14 @@ class Actions:
         return self.auto_dj.playback_active()
     
     def find_song_spotify(self, song_info):
-        cache_key = self._cache_key(song_info)
-        if cache_key in self._song_cache:
-            logger.debug(f"Cache hit for {cache_key}")
-            return self._song_cache[cache_key]
+        cached_song = self.get_cached_song(song_info)
+        logger.debug(f'cached_song: {cached_song}')
+        if cached_song:
+            logger.debug(f"Cache hit for {cached_song}")
+            return cached_song['optimized_results'][0]['uri']
+            #return self._song_cache[cache_key]
         
-        tracks = self.auto_dj.find_song(song_info)['tracks']
+        tracks = self.auto_dj.search_song(song_info)
         logger.debug(f'tracks: {tracks}')
         if not tracks or not tracks['items']:
             logger.warning(f'No tracks found for {song_info}')
@@ -83,11 +104,14 @@ class Actions:
         logger.debug(f'Custom match results: {optimized_results}')
 
         # Cache the results
-        self._song_cache[cache_key] = optimized_results
+        if self.cache_song(song_info, optimized_results):
+            logger.info(f"Cached optimized results for {cached_song}")
+        else:
+            logger.warning(f"Failed to cache optimized results for {cached_song}")
         
         # Limit cache size to prevent memory issues
-        if len(self._song_cache) > 1000:
-            self._song_cache.pop(next(iter(self._song_cache)))
+        #if len(self._song_cache) > 1000:
+        #    self._song_cache.pop(next(iter(self._song_cache)))
 
         # return optimized_results
         return optimized_results[0]['uri']

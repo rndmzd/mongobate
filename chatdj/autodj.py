@@ -93,23 +93,13 @@ class AutoDJ:
 
     def search_song(self, query):
         try:
-            results = self.spotify.search(q=query, type='track', limit=1)
-            tracks = results.get('tracks', {}).get('items', [])
+            results = self.spotify.search(q=query, type='track')
+            tracks = results.get('tracks', {})
             if tracks:
-                track = tracks[0]
-                logger.info(f"Found song: {track['name']} by {track['artists'][0]['name']}")
-                return track['uri']
+                return tracks
             else:
                 logger.warning(f"No song found for query: {query}")
                 return None
         except SpotifyException as e:
             logger.exception("Failed to search for song", exc_info=e)
             return None
-
-    def play_song_by_query(self, query):
-        track_uri = self.search_song(query)
-        if track_uri:
-            return self.play_song(track_uri)
-        else:
-            logger.error(f"Could not find a song for query: {query}")
-            return False

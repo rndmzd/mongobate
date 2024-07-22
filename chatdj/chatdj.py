@@ -177,15 +177,22 @@ class AutoDJ:
             self.queued_tracks.clear()
         except SpotifyException as e:
             logger.exception("Failed to clear playback context", exc_info=e)
-
-    def is_available_in_market(self, track_uri: str) -> bool:
+    
+    def get_user_market(self):
+        try:
+            user_info = self.spotify.me()
+            logger.debug(f"user_info: {user_info}")
+            return user_info['country']
+        except SpotifyException as e:
+            logger.exception("Failed to get user market", exc_info=e)
+    
+    def get_song_markets(self, track_uri):
         try:
             track_info = self.spotify.track(track_uri)
-            user_market = self.spotify.me()['country']
-            return user_market in track_info['available_markets']
+            logger.debug(f"track_info: {track_info}")
+            return track_info['available_markets']
         except SpotifyException as e:
-            logger.exception("Failed to check market availability", exc_info=e)
-            return False
+            logger.exception("Failed to get song markets", exc_info=e)
     
     def playback_active(self) -> bool:
         """

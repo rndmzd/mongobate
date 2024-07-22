@@ -9,45 +9,60 @@ logger = logging.getLogger('mongobate.chatdj')
 logger.setLevel(logging.DEBUG)
 
 class SongExtractor:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key):
         self.openai_client = openai.OpenAI(api_key=api_key)
 
-    def extract_songs(self, message: str, song_count: int = 1) -> List[Dict[str, str]]:
+    def extract_songs(self, message, song_count=1):
+        """Use OpenAI GPT-4o to extract song titles from the message."""
         try:
             response = self.openai_client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "You are a music bot that can extract song titles from messages."},
-                    {"role": "user", "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."}
+                    {
+                        "role": "system",
+                        "content": "You are a music bot that can extract song titles from messages."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."
+                    }
                 ],
-                model="gpt-4"
+                model="gpt-4o"
             )
 
-            logger.debug(f"OpenAI response: {response}")
+            logger.debug(f"response: {response}")
+            print(response)
 
+            song_titles_response = response.choices[0].message.content.strip().split('\n')
             song_titles = []
-            for line in response.choices[0].message.content.strip().split('\n'):
-                if ' - ' in line:
-                    artist, song = line.split(' - ', 1)
-                    song_titles.append({
-                        "artist": artist.strip(),
-                        "song": song.strip(),
-                        "gpt": True
-                    })
+            for idx, resp in enumerate(song_titles_response):
+                if ' - ' in resp:
+                    artist, song = resp.split(' - ', 1)
+                    song_titles.append(
+                        {
+                            "artist": artist.strip(),
+                            "song": song.strip(),
+                            "gpt": True
+                        }
+                    )
                 else:
-                    logger.warning(f"Unexpected format in response: {line}")
+                    logger.warning(f"Unexpected format in response: {resp}")
+                    #if len(song_titles_response) == 1 and song_count == 1:
+                    if song_count == 1:
+                        logger.warning("Returning original request text as song title.")
+                        song_titles.append(
+                            {
+                                "artist": "",
+                                "song": message,
+                                "gpt": False
+                            }
+                        )
 
-            if not song_titles and song_count == 1:
-                logger.warning("Returning original request text as song title.")
-                song_titles.append({
-                    "artist": "",
-                    "song": message,
-                    "gpt": False
-                })
+            logger.debug(f'song_titles: {song_titles}')
+            logger.debug(f"len(song_titles): {len(song_titles)}")
 
-            logger.debug(f'Extracted songs: {song_titles}')
             return song_titles
 
-        except Exception as e:
+        except openai.APIError as e:
             logger.exception("Failed to extract song titles", exc_info=e)
             return []
 

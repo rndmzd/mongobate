@@ -15,7 +15,7 @@ class Actions:
             from chatdj import SongExtractor, AutoDJ
             from . import config
             
-            self.song_extractor = SongExtractor(self.config.get("OpenAI", "api_key"))
+            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
                 config.get("Spotify", "client_id"),
                 config.get("Spotify", "client_secret"),

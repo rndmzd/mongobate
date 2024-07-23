@@ -7,14 +7,16 @@ class Checks:
     def __init__(self):
         from . import config
 
-        self.song_cost = config.getint("General", "song_cost")
-        self.skip_song_cost = config.getint("General", "skip_song_cost")
-        self.command_symbol = config.get("General", "command_symbol")
+        self.config = config
+
+        self.song_cost = self.config.getint("General", "song_cost")
+        self.skip_song_cost = self.config.getint("General", "skip_song_cost")
+        self.command_symbol = self.config.get("General", "command_symbol")
     
     def get_active_components(self):
         active_components = []
-        for component in [comp for comp in config['Components']]:
-            component_val = config.getboolean('Components', component)
+        for component in [comp for comp in self.config['Components']]:
+            component_val = self.config.getboolean('Components', component)
             logger.debug(f"{component} -> {component_val}")
             if component_val:
                 active_components.append(component)

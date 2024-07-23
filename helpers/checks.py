@@ -1,14 +1,12 @@
-import configparser
 import logging
 
 logger = logging.getLogger('mongobate.helpers.checks')
 logger.setLevel(logging.DEBUG)
 
-config = configparser.RawConfigParser()
-config.read("config.ini")
-
 class Checks:
     def __init__(self):
+        from . import config
+
         self.song_cost = config.getint("General", "song_cost")
         self.skip_song_cost = config.getint("General", "skip_song_cost")
         self.command_symbol = config.get("General", "command_symbol")

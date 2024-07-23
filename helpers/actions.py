@@ -1,4 +1,3 @@
-import configparser
 import logging
 from functools import lru_cache
 import threading
@@ -9,14 +8,13 @@ from rapidfuzz import fuzz
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
-config = configparser.RawConfigParser()
-config.read("config.ini")
 
 class Actions:
     def __init__(self, chatdj=False, vip_audio=False, command_parser=False):
         if chatdj:
             from chatdj import SongExtractor, AutoDJ
-
+            from . import config
+            
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
                 config.get("Spotify", "client_id"),

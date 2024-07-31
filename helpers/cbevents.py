@@ -1,8 +1,5 @@
-import datetime
-from bson import ObjectId
 import logging
 import simplejson as json
-import threading
 import time
 
 from utils import MongoJSONEncoder

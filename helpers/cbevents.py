@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import simplejson as json
 import time
@@ -12,6 +13,7 @@ class CBEvents:
     def __init__(self):
         from . import Actions, Checks, Commands
         from . import config
+        from handlers.obshandler import setup_obs_integration
 
         self.checks = Checks()
 
@@ -30,6 +32,9 @@ class CBEvents:
         if 'command_parser' in self.active_components:
             actions_args['command_parser'] = True
             self.commands = Commands()
+        if 'obs_integration' in self.active_components:
+            self.obs_handler = asyncio.run(setup_obs_integration(config))
+
 
         self.actions = Actions(actions_args)
 

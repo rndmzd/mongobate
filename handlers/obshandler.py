@@ -2,19 +2,36 @@ import asyncio
 import logging
 import json
 from obswebsocket import obsws, requests
+from aiohttp import web
+import os
 
 logger = logging.getLogger('mongobate.obshandler')
 logger.setLevel(logging.DEBUG)
 
 class OBSHandler:
-    def __init__(self, host, port, password):
-        self.host = host
-        self.port = port
-        self.password = password
+    def __init__(self, obs_host, obs_port, obs_password, http_host, http_port):
+        self.obs_host = obs_host
+        self.obs_port = obs_port
+        self.obs_password = obs_password
+        self.http_host = http_host
+        self.http_port = http_port
         self.ws = None
+        self.app = web.Application()
+        self.app.router.add_static('/overlays', 'overlays')
+        self.app.router.add_get('/', self.handle_index)
+
+    async def handle_index(self, request):
+        return web.Response(text="OBS Integration Server is running.")
+
+    async def start_http_server(self):
+        runner = web.AppRunner(self.app)
+        await runner.setup()
+        site = web.TCPSite(runner, self.http_host, self.http_port)
+        await site.start()
+        logger.info(f"HTTP server started on http://{self.http_host}:{self.http_port}")
 
     async def connect(self):
-        self.ws = obsws(self.host, self.port, self.password)
+        self.ws = obsws(self.obs_host, self.obs_port, self.obs_password)
         self.ws.connect()
         logger.info("Connected to OBS WebSocket")
 
@@ -65,7 +82,6 @@ class OBSHandler:
             logger.error(f"Failed to hide source: {source_name}")
 
     async def trigger_overlay(self, scene_name, source_name, data):
-        # Assuming the browser source is listening for a 'trigger' message
         send_data = requests.SendBrowserSourceNavigate(
             sourceName=source_name,
             url=f"javascript:triggerOverlay({json.dumps(data)})"
@@ -76,34 +92,26 @@ class OBSHandler:
         else:
             logger.error(f"Failed to trigger overlay: {source_name}")
 
-# Example usage
-async def main():
-    from . import config
-
+async def setup_obs_integration(config):
     obs_handler = OBSHandler(
-        host=config.get('OBS', 'host'),
-        port=config.getint('OBS', 'port'),
-        password=config.get('OBS', 'password')
+        obs_host=config.get('OBS', 'host'),
+        obs_port=config.getint('OBS', 'port'),
+        obs_password=config.get('OBS', 'password'),
+        http_host=config.get('HTTPServer', 'host'),
+        http_port=config.getint('HTTPServer', 'port')
     )
-
     await obs_handler.connect()
+    await obs_handler.start_http_server()
+
+    if not os.path.exists('overlays'):
+        os.makedirs('overlays')
 
     # Create a browser source for tips
     await obs_handler.create_browser_source(
-        "Main", "TipOverlay", "http://localhost:8000/tip_overlay.html")
+        "Main", "TipOverlay", f"http://{config.get('HTTPServer', 'host')}:{config.get('HTTPServer', 'port')}/overlays/tip_overlay.html")
 
-    # Trigger the overlay when a tip is received
-    await obs_handler.trigger_overlay("Main", "TipOverlay", {
-        "username": "user123",
-        "amount": 50,
-        "message": "Great stream!"
-    })
+    return obs_handler
 
-    # Hide the overlay after a few seconds
-    await asyncio.sleep(5)
-    await obs_handler.hide_source("Main", "TipOverlay")
-
-    await obs_handler.disconnect()
-
+# Example usage
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(setup_obs_integration())

@@ -31,7 +31,7 @@ class Actions:
             logger.debug(f'Cached song: {cached_song}')
             return cached_song
         except Exception as e:
-            logger.exception('Failed to retrieve cached song', exc_info=e)
+            logger.exception('Failed to retrieve cached song.', exc_info=e)
             return None
 
     def cache_song(self, song_info: Dict[str, str], optimized_results: List[Dict]) -> bool:
@@ -46,7 +46,7 @@ class Actions:
             logger.debug(f'Inserted cache document ID: {inserted_id}')
             return True
         except Exception as e:
-            logger.exception('Failed to save cached song', exc_info=e)
+            logger.exception('Failed to save cached song.', exc_info=e)
             return False
 
     def _custom_score(self, query_artist: str, query_song: str, result_artist: str, result_song: str) -> float:
@@ -63,14 +63,14 @@ class Actions:
     def extract_song_titles(self, message: str, song_count: int) -> List[Dict[str, str]]:
         """Extract song titles from a message."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return []
         return self.song_extractor.extract_songs(message, song_count)
 
     def get_playback_state(self) -> bool:
         """Get the current playback state."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return False
         try:
             return self.auto_dj.playback_active()
@@ -81,18 +81,18 @@ class Actions:
     def find_song_spotify(self, song_info: Dict[str, str]) -> Optional[str]:
         """Find a song on Spotify, using cache if available."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return None
 
         cached_song = self.get_cached_song(song_info)
         if cached_song:
-            logger.debug(f"Cache hit for {song_info}")
+            logger.debug(f"Cache hit for {song_info}.")
             return cached_song['optimized_results'][0]['uri']
 
         try:
             tracks = self.auto_dj.find_song(song_info)['tracks']
             if not tracks or not tracks['items']:
-                logger.warning(f'No tracks found for {song_info}')
+                logger.warning(f'No tracks found for {song_info}.')
                 return None
 
             results = []
@@ -111,9 +111,9 @@ class Actions:
             logger.debug(f'Custom match results: {optimized_results}')
 
             if self.cache_song(song_info, optimized_results):
-                logger.info(f"Cached optimized results for {song_info}")
+                logger.info(f"Cached optimized results for {song_info}.")
             else:
-                logger.warning(f"Failed to cache optimized results for {song_info}")
+                logger.warning(f"Failed to cache optimized results for {song_info}.")
 
             return optimized_results[0]['uri']
         except Exception as e:
@@ -123,7 +123,7 @@ class Actions:
     def available_in_market(self, song_uri: str) -> bool:
         """Check if a song is available in the user's market."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return False
 
         try:
@@ -138,7 +138,7 @@ class Actions:
     def add_song_to_queue(self, uri: str) -> bool:
         """Add a song to the playback queue."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return False
 
         logger.debug('Executing add song to queue action.')
@@ -151,7 +151,7 @@ class Actions:
     def skip_song(self) -> bool:
         """Skip the currently playing song."""
         if not self.chatdj_enabled:
-            logger.warning("ChatDJ is not enabled")
+            logger.warning("ChatDJ is not enabled.")
             return False
 
         logger.debug('Executing skip song action.')

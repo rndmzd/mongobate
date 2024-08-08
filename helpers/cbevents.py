@@ -34,6 +34,7 @@ class CBEvents:
             self.commands = Commands()
         if 'obs_integration' in self.active_components:
             self.obs_handler = asyncio.run(setup_obs_integration(config))
+            self.overlay_trigger_threshold = config.getint("General", "overlay_trigger_threshold")
 
 
         self.actions = Actions(actions_args)
@@ -119,26 +120,35 @@ class CBEvents:
                         logger.debug(f'skip_song_result: {skip_song_result}')
 
                 logger.info("Checking if song request.")
-                if not self.checks.is_song_request(event["tip"]["tokens"]):
-                    return True
-                logger.info("Song request detected.")
-                request_count = self.checks.get_request_count(event["tip"]["tokens"])
-                logger.info(f"Request count: {request_count}")
-                song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
-                logger.debug(f'song_extracts:  {song_extracts}')
-                for song_info in song_extracts:
-                    song_uri = self.actions.find_song_spotify(song_info)
-                    logger.debug(f'song_uri: {song_uri}')
-                    if song_uri:
-                        if not self.actions.available_in_market(song_uri):
-                            logger.warning(f"Song not available in user market: {song_info}")
-                            continue
-                        add_queue_result = self.actions.add_song_to_queue(song_uri)
-                        logger.debug(f'add_queue_result: {add_queue_result}')
-                        if not add_queue_result:
-                            logger.error(f"Failed to add song to queue: {song_info}")
-                        else:
-                            logger.info(f"Song added to queue: {song_info}")
+                if self.checks.is_song_request(event["tip"]["tokens"]):
+                    logger.info("Song request detected.")
+                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
+                    logger.info(f"Request count: {request_count}")
+                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
+                    logger.debug(f'song_extracts:  {song_extracts}')
+                    for song_info in song_extracts:
+                        song_uri = self.actions.find_song_spotify(song_info)
+                        logger.debug(f'song_uri: {song_uri}')
+                        if song_uri:
+                            if not self.actions.available_in_market(song_uri):
+                                logger.warning(f"Song not available in user market: {song_info}")
+                                continue
+                            add_queue_result = self.actions.add_song_to_queue(song_uri)
+                            logger.debug(f'add_queue_result: {add_queue_result}')
+                            if not add_queue_result:
+                                logger.error(f"Failed to add song to queue: {song_info}")
+                            else:
+                                logger.info(f"Song added to queue: {song_info}")
+            if 'obs_integration' in self.active_components:
+                logger.info("Checking if tip amount exceeds overlay trigger threshold.")
+                if self.checks.is_overlay_triggered(event["tip"]["tokens"]):
+                    logger.info("Tip amount exceeds overlay trigger threshold. Triggering overlay.")
+                    if 'obs_integration' in self.active_components and self.obs_handler:
+                        asyncio.run(self.obs_handler.trigger_overlay("Main", "TipOverlay", {
+                            "username": event["user"]["username"],
+                            "amount": event["tip"]["tokens"],
+                            "message": event["tip"]["message"]
+                        }))
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)

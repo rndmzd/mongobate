@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tip Overlay</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: transparent;
+        color: white;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      }
+      #overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+      }
+      #username {
+        font-size: 24px;
+        font-weight: bold;
+      }
+      #amount {
+        font-size: 36px;
+        color: #ffd700;
+      }
+      #message {
+        font-size: 18px;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay">
+      <div id="username"></div>
+      <div id="amount"></div>
+      <div id="message"></div>
+    </div>
+
+    <script>
+      function triggerOverlay(data) {
+        const overlay = document.getElementById("overlay");
+        document.getElementById("username").textContent = data.username;
+        document.getElementById("amount").textContent = `$${data.amount}`;
+        document.getElementById("message").textContent = data.message;
+
+        overlay.style.opacity = "1";
+        setTimeout(() => {
+          overlay.style.opacity = "0";
+        }, 5000);
+      }
+
+      // For testing purposes
+      // triggerOverlay({username: 'TestUser', amount: 50, message: 'Great stream!'});
+    </script>
+  </body>
+</html>

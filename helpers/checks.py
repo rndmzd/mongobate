@@ -12,6 +12,7 @@ class Checks:
         self.song_cost = self.config.getint("General", "song_cost")
         self.skip_song_cost = self.config.getint("General", "skip_song_cost")
         self.command_symbol = self.config.get("General", "command_symbol")
+        self.overlay_trigger_threshold = self.config.getint("General", "overlay_trigger_threshold")
     
     def get_active_components(self):
         active_components = []
@@ -44,3 +45,6 @@ class Checks:
             }
             return command
         return None
+    
+    def is_overlay_triggered(self, tip_amount):
+        return tip_amount >= self.overlay_trigger_threshold

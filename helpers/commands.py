@@ -6,12 +6,11 @@ import yaml
 logger = logging.getLogger('mongobate.helpers.commands')
 logger.setLevel(logging.DEBUG)
 
-config = configparser.RawConfigParser()
-config.read("config.ini")
-
 
 class Commands:
     def __init__(self):
+        from . import config
+        
         self.commands_file = config.get('General', 'commands_file')
         self.commands = {}
 

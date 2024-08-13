@@ -1,4 +1,3 @@
-import configparser
 import datetime
 from bson import ObjectId
 import logging
@@ -11,13 +10,11 @@ from utils import MongoJSONEncoder
 logger = logging.getLogger('mongobate.helpers.cbevents')
 logger.setLevel(logging.DEBUG)
 
-config = configparser.RawConfigParser()
-config.read("config.ini")
-
 
 class CBEvents:
     def __init__(self):
         from . import Actions, Checks, Commands
+        from . import config
 
         self.checks = Checks()
 

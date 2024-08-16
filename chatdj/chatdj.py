@@ -81,6 +81,16 @@ class AutoDJ:
         self.playing_first_track = False
         self.queued_tracks = []
 
+        self._print_variables()
+
+    def _print_variables(self, return_value=None):
+        print()
+        print(f"self.queue_active: {self.queue_active}")
+        print(f"self.playing_first_track: {self.playing_first_track}")
+        print(f"self.queued_tracks: {self.queued_tracks}")
+        print(return_value)
+        print()
+
     def _select_playback_device(self) -> str:
         try:
             devices = self.spotify.devices()['devices']
@@ -132,13 +142,19 @@ class AutoDJ:
                 if currently_playing != track_uri:
                     logger.info(f"Currently track does not match request: {currently_playing}. Skipping.")
                     self.skip_song()"""
+
+                self._print_variables(True)
+
                 return True
-            
+
             logger.info(f"Adding track to Spotify queue: {track_uri}")
             self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
             logger.info(f"Adding track to internal queue: {track_uri}")
             self.queued_tracks.append(track_uri)
             logger.debug(f"queued_tracks: {self.queued_tracks}")
+
+            self._print_variables(True)
+
             return True
 
         except SpotifyException as e:
@@ -148,24 +164,27 @@ class AutoDJ:
     def check_queue_status(self) -> bool:
         try:
             if not self.queue_active:
+                self._print_variables(False)
+
                 return False
 
             playback = self.spotify.current_playback()
             logger.debug(f"playback: {playback}")
 
             logger.debug(f"self.queued_tracks: {self.queued_tracks}")
-            
+
             if not playback or not playback['is_playing']:
                 if self.playing_first_track:
                     logger.info("Finished playing queued track.")
                     self.queued_tracks.pop(0)
                     self.playing_first_track = False
-                    
+
                 if not self.queued_tracks:
                     logger.info("Playback ended and queue is empty.")
                     self.clear_playback_context()
                     logger.debug("Setting queue to inactive.")
                     self.queue_active = False
+                    self._print_variables(True)
                     return True
                 else:
                     logger.info("Playback ended, but queue is not empty. Starting next track.")
@@ -190,9 +209,11 @@ class AutoDJ:
                 else:
                     logger.info("Playing unexpected track, skipping.")
                     self.skip_song()
-            
+
             else:
                 logger.warning("Unknown playback state.")
+
+            self._print_variables(False)
 
             return False
 
@@ -207,9 +228,14 @@ class AutoDJ:
             self.queue_active = False
             self.playing_first_track = False
             self.queued_tracks.clear()
+
+            self._print_variables(True)
+
+            return True
         except SpotifyException as e:
             logger.exception("Failed to clear playback context.", exc_info=e)
-    
+            return False
+
     def get_user_market(self):
         try:
             user_info = self.spotify.me()
@@ -217,7 +243,7 @@ class AutoDJ:
             return user_info['country']
         except SpotifyException as e:
             logger.exception("Failed to get user market.", exc_info=e)
-    
+
     def get_song_markets(self, track_uri):
         try:
             track_info = self.spotify.track(track_uri)
@@ -225,7 +251,7 @@ class AutoDJ:
             return track_info['available_markets']
         except SpotifyException as e:
             logger.exception("Failed to get song markets.", exc_info=e)
-    
+
     def playback_active(self) -> bool:
         """
         Check if there's active playback on the user's Spotify account.
@@ -244,7 +270,7 @@ class AutoDJ:
         except SpotifyException as e:
             logger.exception("Error checking playback state.", exc_info=e)
             return False
-    
+
     def skip_song(self):
         try:
             if not self.playback_active():

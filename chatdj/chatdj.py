@@ -133,6 +133,7 @@ class AutoDJ:
             if not self.queue_active:
                 logger.debug("Setting queue to active.")
                 self.queue_active = True
+                self.playing_first_track = True
                 logger.info("Starting playback.")
                 self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
                 logger.debug("Adding track to internal queue.")

@@ -109,6 +109,9 @@ class AutoDJ:
                     device = devices[selection - 1]
                     logger.info(f"Selected device: {device['name']} ({device['id']})")
                     return device['id']
+                except KeyboardInterrupt:
+                    logger.info("User cancelled device selection.")
+                    raise
                 except (ValueError, IndexError):
                     print("Invalid selection. Please try again.")
 
@@ -134,24 +137,27 @@ class AutoDJ:
                 logger.debug("Setting queue to active.")
                 self.queue_active = True
                 self.playing_first_track = True
-                logger.info("Starting playback.")
+                
+                """logger.info("Starting playback.")
                 self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
-                logger.debug("Adding track to internal queue.")
-                self.queued_tracks.append(track_uri)
-                """logger.info("Started playback. Checking if current song matches request.")
+                logger.info("Started playback. Checking if current song matches request.")
                 currently_playing = self.spotify.currently_playing()['item']['uri']
                 if currently_playing != track_uri:
                     logger.info(f"Currently track does not match request: {currently_playing}. Skipping.")
-                    self.skip_song()"""
+                    self.skip_song()
 
                 self._print_variables(True)
 
-                return True
+                return True"""
+            
+            logger.debug(f"track_uri: {track_uri}")
 
-            logger.info(f"Adding track to Spotify queue: {track_uri}")
-            self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
-            logger.info(f"Adding track to internal queue: {track_uri}")
+            logger.debug("Adding track to internal queue.")
             self.queued_tracks.append(track_uri)
+
+            logger.info("Adding track to Spotify queue.")
+            self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
+
             logger.debug(f"queued_tracks: {self.queued_tracks}")
 
             self._print_variables(True)
@@ -166,34 +172,60 @@ class AutoDJ:
         try:
             if not self.queue_active:
                 self._print_variables(False)
-
                 return False
-
-            playback = self.spotify.current_playback()
-            logger.debug(f"playback: {playback}")
 
             logger.debug(f"self.queued_tracks: {self.queued_tracks}")
 
-            if not playback or not playback['is_playing']:
-                if self.playing_first_track:
-                    logger.info("Finished playing queued track.")
-                    self.queued_tracks.pop(0)
-                    self.playing_first_track = False
-
-                if not self.queued_tracks:
-                    logger.info("Playback ended and queue is empty.")
-                    self.clear_playback_context()
-                    logger.debug("Setting queue to inactive.")
-                    self.queue_active = False
+            if not self.playback_active():
+                if self.queued_tracks:
+                    logger.info("Queue exists but playback is not active. Starting playback.")
+                    self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks.pop(0)])
                     self._print_variables(True)
                     return True
-                else:
-                    logger.info("Playback ended, but queue is not empty. Starting next track.")
-                    self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks[0]])
+                
+                logger.info("No active playback and queue is empty. Setting queue to inactive.")
+                self.queue_active = False
+                return False
 
-            elif playback['item']:
+            # playback = self.spotify.current_playback()
+            # logger.debug(f"playback: {playback}")
+
+            # if not playback or not playback['is_playing']:
+                """if self.playing_first_track:
+                    logger.info("Finished playing queued track.")
+                    self.queued_tracks.pop(0)
+                    self.playing_first_track = False"""
+
+                #if not self.queued_tracks:
+                """logger.info("Playback ended and queue is empty.")
+                self.clear_playback_context()
+                logger.debug("Setting queue to inactive.")
+                self.queue_active = False
+                self._print_variables(True)
+                return True"""
+                # else:
+                #     logger.info("Playback ended, but queue is not empty. Starting next track.")
+                #     self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks[0]])
+
+            # elif playback['item']:
+
+            if self.playing_first_track:
+                logger.debug("Clearing playing_first_track flag.")
+                self.playing_first_track = False
+            
+            logger.debug("Playback active. Comparing internal and external queues.")
+            spotify_queue = self.spotify.queue()
+            logger.debug(f"spotify_queue: {spotify_queue}")
+            playback = self.spotify.current_playback()
+            logger.debug(f"playback: {playback}")
+            current_track = playback['item']['uri']
+            logger.debug(f"current_track: {current_track}")
+            """else:
+                playback = self.spotify.current_playback()
+                logger.debug(f"playback: {playback}")
                 current_track = playback['item']['uri']
                 logger.debug(f"current_track: {current_track}")
+
                 logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
                 if self.playing_first_track and current_track != self.queued_tracks[0]:
                     logger.info("Finished playing queued track.")
@@ -212,7 +244,7 @@ class AutoDJ:
                     self.skip_song()
 
             else:
-                logger.warning("Unknown playback state.")
+                logger.warning("Unknown playback state.")"""
 
             self._print_variables(False)
 

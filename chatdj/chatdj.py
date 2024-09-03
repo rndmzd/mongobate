@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Optional
+import sys
 
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
@@ -113,6 +114,9 @@ class AutoDJ:
                     raise
                 except (ValueError, IndexError):
                     print("Invalid selection. Please try again.")
+                except KeyboardInterrupt:
+                    logger.info("User aborted selection. Exiting.")
+                    sys.exit()
 
         except Exception as e:
             logger.exception("Failed to select playback device", exc_info=e)

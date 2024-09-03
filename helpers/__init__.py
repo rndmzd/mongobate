@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 from pymongo import MongoClient
 
+from helpers.actions import Actions
+from helpers.checks import Checks
+from helpers.cbevents import CBEvents
+from helpers.commands import Commands
+
 logger = logging.getLogger('mongobate.chatdj')
 logger.setLevel(logging.DEBUG)
 
@@ -23,8 +28,3 @@ mongo_client = MongoClient(
 mongo_db = mongo_client[os.getenv('MONGO_DATABASE', mongo_config.get('db'))]
 
 song_cache_collection = mongo_db['song_cache_collection']
-
-from helpers.actions import Actions
-from helpers.checks import Checks
-from helpers.cbevents import CBEvents
-from helpers.commands import Commands

@@ -1,7 +1,6 @@
 from utils.jsonencoders import MongoJSONEncoder
 
 import configparser
-import os
 from pathlib import Path
 
 config_path = Path(__file__).parent.parent / 'config.ini'

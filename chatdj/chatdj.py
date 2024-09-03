@@ -29,7 +29,6 @@ class SongExtractor:
             )
 
             logger.debug(f"response: {response}")
-            print(response)
 
             song_titles_response = response.choices[0].message.content.strip().split('\n')
             song_titles = []
@@ -246,9 +245,9 @@ class AutoDJ:
             else:
                 logger.warning("Unknown playback state.")"""
 
-            self._print_variables(False)
+            self._print_variables(True)
 
-            return False
+            return True
 
         except SpotifyException as e:
             logger.exception("Failed to check queue status", exc_info=e)
@@ -257,7 +256,49 @@ class AutoDJ:
     def clear_playback_context(self):
         try:
             logger.info("Clearing playback context.")
-            self.spotify.pause_playback(device_id=self.playback_device)
+            if self.playback_active():
+                self.spotify.pause_playback(device_id=self.playback_device)
+            previous_track = None
+            attempts = 0
+            max_attempts = 5
+
+            while True:
+                # Get the current queue
+                queue = self.spotify.queue()
+                
+                # If the queue is empty, we're done
+                if len(queue['queue']) == 0:
+                    print("Queue is now empty")
+                    break
+                
+                # Check if we're stuck on the same track
+                current_track = queue['queue'][0]['uri']
+                if current_track == previous_track:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        print("Unable to clear the last track. Stopping.")
+                        break
+                else:
+                    attempts = 0
+
+                # Skip to the next track
+                try:
+                    self.spotify.next_track()
+                    print(f"Skipped track: {queue['queue'][0]['name']}")
+                    # Wait a short time to allow the API to update
+                    time.sleep(1)
+                except spotipy.exceptions.SpotifyException as e:
+                    logger.error(f"Error skipping track: {e}")
+                    break
+
+                previous_track = current_track
+
+            # After clearing the queue, pause playback
+            try:
+                self.spotify.pause_playback()
+                logger.info("Playback paused")
+            except SpotifyException as e:
+                logger.error(f"Error pausing playback: {e}")
             self.queue_active = False
             self.playing_first_track = False
             self.queued_tracks.clear()
@@ -279,9 +320,10 @@ class AutoDJ:
 
     def get_song_markets(self, track_uri):
         try:
-            track_info = self.spotify.track(track_uri)
-            logger.debug(f"track_info: {track_info}")
-            return track_info['available_markets']
+            if track_info := self.spotify.track(track_uri):
+                logger.debug(f"track_info: {track_info}")
+                return track_info['available_markets']
+            return []
         except SpotifyException as e:
             logger.exception("Failed to get song markets.", exc_info=e)
 
@@ -293,8 +335,8 @@ class AutoDJ:
             bool: True if there's active playback, False otherwise.
         """
         try:
-            playback_state = self.spotify.current_playback()
-            if playback_state and playback_state['is_playing']:
+            # playback_state = self.spotify.current_playback()
+            if (playback_state := self.spotify.current_playback()) and playback_state['is_playing']:
                 logger.debug("Playback is active.")
                 return True
             else:
@@ -315,11 +357,16 @@ class AutoDJ:
             logger.exception("Failed to skip song.", exc_info=e)
             return False
 
-"""if __name__ == "__main__":
+if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
+    import sys
+    import time
+    from pprint import pprint
 
     load_dotenv()
+
+    logging.basicConfig()
 
     song_extractor = SongExtractor(os.getenv('OPENAI_API_KEY'))
     auto_dj = AutoDJ(
@@ -328,21 +375,49 @@ class AutoDJ:
         os.getenv('SPOTIFY_REDIRECT_URI')
     )
 
+    queue = auto_dj.spotify.queue()
+    print()
+    #pprint(queue)
+    #print()
+    #pprint(queue['currently_playing'])
+    #print()
+    #pprint(queue['queue'])
+    print()
+    print(len(queue['queue']))
+    [print(i['name']) for i in queue['queue']]
+
+    auto_dj.clear_playback_context()
+
+    queue = auto_dj.spotify.queue()
+    print()
+    #pprint(queue)
+    #print()
+    #pprint(queue['currently_playing'])
+    #print()
+    #pprint(queue['queue'])
+    print()
+    print(len(queue['queue']))
+    [print(i['name']) for i in queue['queue']]
+    
+    # sys.exit()
+
     # Example usage
     message = "Play Dancing Queen by ABBA and Bohemian Rhapsody by Queen"
     songs = song_extractor.extract_songs(message, song_count=2)
 
     for song in songs:
-        track_uri = auto_dj.find_song(song)
-        if track_uri and auto_dj.is_available_in_market(track_uri):
-            auto_dj.add_song_to_queue(track_uri)
+        if track_uri := auto_dj.find_song(song)['tracks']['items'][0]['uri']:
+            if auto_dj.get_user_market() in auto_dj.get_song_markets(track_uri):
+                auto_dj.add_song_to_queue(track_uri)
+            else:
+                logger.warning("Song not available in user's market. Skipping.")
 
     # Main loop to check queue status
     try:
         while True:
-            if auto_dj.check_queue_status():
+            if not auto_dj.check_queue_status():
                 break
             time.sleep(5)
     except KeyboardInterrupt:
-        print("Stopping playback")
-        auto_dj.clear_playback_context()"""
+        logger.info("Exit signal received. Stopping playback.")
+        auto_dj.clear_playback_context()

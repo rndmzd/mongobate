@@ -291,7 +291,7 @@ class AutoDJ:
                     print(f"Skipped track: {queue['queue'][0]['name']}")
                     # Wait a short time to allow the API to update
                     time.sleep(1)
-                except spotipy.exceptions.SpotifyException as e:
+                except SpotifyException as e:
                     logger.error(f"Error skipping track: {e}")
                     break
 

@@ -80,9 +80,9 @@ class AutoDJ:
         logger.debug("Prompting user for playback device selection.")
         self.playback_device = self._select_playback_device()
         logger.debug("Clearing playback context.")
-        self.clear_playback_context()
         self.playing_first_track = False
         self.queued_tracks = []
+        self.clear_playback_context()
 
         self._print_variables()
 

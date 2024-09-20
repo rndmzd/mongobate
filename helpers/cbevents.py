@@ -33,6 +33,8 @@ class CBEvents:
         if 'command_parser' in self.active_components:
             actions_args['command_parser'] = True
             self.commands = Commands()
+        if 'custom_actions' in self.active_components:
+            pass
 
         self.actions = Actions(actions_args)
 
@@ -385,7 +387,7 @@ class CBEvents:
             logger.exception("Error processing media purchase event", exc_info=e)
             return False
 
-    def chat_message(self, event, admin_users):
+    def chat_message(self, event, admin_users, action_users):
         """
         {
             "message": {
@@ -417,6 +419,9 @@ class CBEvents:
                         logger.info("Trying command: {command}")
                         command_result = self.commands.try_command(command)
                         logger.debug(f"command_result: {command_result}")
+            if 'custom_actions' in self.active_components:
+                if event["user"]["username"] in action_users:
+                    pass
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

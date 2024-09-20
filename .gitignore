@@ -5,3 +5,6 @@ logs/
 **__pycache__/
 .cache
 commands.yaml
+**node_modules/
+**.env
+chatdj/server/

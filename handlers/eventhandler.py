@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 
+
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
@@ -25,6 +26,7 @@ class EventHandler:
         user_collection=None,
         vip_refresh_interval=300,
         admin_refresh_interval=300,
+        action_refresh_interval=300,
         audio_device=None,
         aws_key=None,
         aws_secret=None):
@@ -89,6 +91,11 @@ class EventHandler:
             self.admin_users = {}
             self.admin_refresh_interval = admin_refresh_interval
             self.load_admin_users()
+        
+        if 'custom_actions' in self.cb_events.active_components:
+            self.action_users = {}
+            self.action_refresh_interval = action_refresh_interval
+            self.load_action_users()
 
     def load_vip_users(self):
         try:
@@ -110,9 +117,20 @@ class EventHandler:
         except Exception as e:
             logger.exception("Error loading admin users:", exc_info=e)
 
+    def load_action_users(self):
+        try:
+            action_users = self.user_collection.find({'action': True, 'active': True})
+            for user in action_users:
+                logger.debug(f"user: {user}")
+                self.action_users[user['username']] = True
+            logger.info(f"Loaded {len(self.action_users)} action users.")
+        except Exception as e:
+            logger.exception("Error loading action users:", exc_info=e)
+
     def privileged_user_refresh(self):
         last_load_vip = time.time()
         last_load_admin = time.time()
+        last_load_action = time.time()
         while not self._stop_event.is_set():
             if time.time() - last_load_vip > self.vip_refresh_interval:
                 self.load_vip_users()
@@ -120,6 +138,9 @@ class EventHandler:
             if time.time() - last_load_admin > self.admin_refresh_interval:
                 self.load_admin_users()
                 last_load_admin = time.time()
+            if time.time() - last_load_action > self.action_refresh_interval:
+                self.load_action_users()
+                last_load_action = time.time()
 
             time.sleep(1)
 
@@ -132,7 +153,8 @@ class EventHandler:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
                 privileged_users = {
                     "vip": self.vip_users,
-                    "admin": self.admin_users
+                    "admin": self.admin_users,
+                    "custom_actions": self.action_users
                 }
                 process_result = self.cb_events.process_event(event, privileged_users, self.audio_player)
                 logger.debug(f"process_result: {process_result}")
@@ -171,11 +193,10 @@ class EventHandler:
         )
         self.event_thread.start()
 
-        logger.info("Starting admin user refresh thread...")
+        logger.info("Starting privileged user refresh thread...")
         self.privileged_user_refresh_thread = threading.Thread(
             target=self.privileged_user_refresh, args=(), daemon=True
         )
-        self.privileged_user_refresh_thread.start()
 
     def stop(self):
         logger.debug("Setting stop event.")

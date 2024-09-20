@@ -3,6 +3,8 @@ import queue
 import threading
 import time
 
+from dataclasses import dataclass
+
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
@@ -10,6 +12,20 @@ import urllib.parse
 
 logger = logging.getLogger('mongobate.handlers.eventhandler')
 logger.setLevel(logging.DEBUG)
+
+
+@dataclass
+class AdminUsers:
+    username: list
+
+@dataclass
+class VipUsers:
+    username: list
+
+@dataclass
+class ActionUsers:
+    username: str
+    message: list
 
 
 class EventHandler:

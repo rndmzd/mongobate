@@ -65,6 +65,8 @@ signal.signal(signal.SIGHUP, reload_config)
 
 
 def initialize_handler():
+    global db_handler
+    
     try:
         logger.info("Loading configuration from file.")
         config.read("config.ini")

@@ -46,7 +46,7 @@ def reload_config(signum, frame):
     if db_handler:
         logger.info("Stopping database handler.")
         db_handler.stop()
-        while db_handler.is_alive():
+        while db_handler.is_alive:
             time.sleep(0.1)
     while True:
         logger.info("Reinitializing database handler.")
@@ -66,7 +66,7 @@ signal.signal(signal.SIGHUP, reload_config)
 
 def initialize_handler():
     global db_handler
-    
+
     try:
         logger.info("Loading configuration from file.")
         config.read("config.ini")
@@ -110,8 +110,8 @@ def initialize_handler():
 if __name__ == '__main__':
     while True:
         try:
-            if not db_handler or not db_handler.is_alive():
-                logger.error('Database handler is not running. Attempting to reinitialize...')
+            if not db_handler or not db_handler.is_alive:
+                logger.info('Database handler is not running. Attempting to reinitialize...')
                 initialize_status = initialize_handler()
                 logger.debug(f'Initialize status: {initialize_status}')
                 if not initialize_status:
@@ -124,7 +124,7 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             logger.info("Shutting down...")
             db_handler.stop()
-            while db_handler.is_alive():
+            while db_handler.is_alive:
                 time.sleep(0.1)
             logger.info("Done.")
             break

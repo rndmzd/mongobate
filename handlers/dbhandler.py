@@ -59,6 +59,8 @@ class DBHandler:
                 f"?authMechanism=MONGODB-AWS&authSource=$external"
             )
 
+            self.is_alive = False
+
     def connect_to_mongodb(self):
         try:
             if self.mongo_connection_uri:
@@ -138,6 +140,7 @@ class DBHandler:
         network_thread.start()"""
 
         try:
+            self.is_alive = True
             self.long_polling()
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt detected. Cleaning up...")
@@ -145,6 +148,8 @@ class DBHandler:
             processor_thread.join()
             # network_thread.join()
             logger.info("Done.")
+        finally:
+            self.is_alive = False
 
     def stop(self):
         self._stop_event.set()

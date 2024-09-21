@@ -155,8 +155,8 @@ class DBHandler:
             self.is_alive = False
 
     def stop(self):
+        logger.debug("Setting stop event.")
         self._stop_event.set()
-        logger.info("Stopping DBHandler...")
 
 
 if __name__ == "__main__":

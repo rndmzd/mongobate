@@ -128,4 +128,6 @@ if __name__ == '__main__':
             break
         except Exception as e:
             logger.exception("An unexpected error occurred.", exc_info=e)
+            logger.error("Restarting in 5 seconds...")
+            time.sleep(5)
             continue

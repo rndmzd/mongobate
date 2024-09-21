@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Optional
 import sys
+import time
 
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
@@ -365,8 +366,6 @@ class AutoDJ:
 if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
-    import sys
-    import time
     from pprint import pprint
 
     load_dotenv()

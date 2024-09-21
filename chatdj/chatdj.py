@@ -244,11 +244,12 @@ class AutoDJ:
             else:
                 logger.warning("Unknown playback state.")"""
             
-            # Check if the current track is the first track in the queue
-            logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
-            if (current_track := self.spotify.current_playback()['item']['uri']) == self.queued_tracks[0]:
-                logger.info(f"Now playing queued track: {current_track}")
-                self.queued_tracks.pop(0)
+            if self.queued_tracks:
+                # Check if the current track is the first track in the queue
+                logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
+                if (current_track := self.spotify.current_playback()['item']['uri']) == self.queued_tracks[0]:
+                    logger.info(f"Now playing queued track: {current_track}")
+                    self.queued_tracks.pop(0)
             
             self._print_variables(True)
             return True

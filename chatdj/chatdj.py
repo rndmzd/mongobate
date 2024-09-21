@@ -178,7 +178,9 @@ class AutoDJ:
             if not self.playback_active():
                 if len(self.queued_tracks) > 0:
                     logger.info("Queue populated but playback is not active. Starting playback.")
-                    self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks.pop(0)])
+                    popped_track = self.queued_tracks.pop(0)
+                    logger.debug(f"popped_track: {popped_track}")
+                    self.spotify.start_playback(device_id=self.playback_device, uris=[popped_track])
                     logger.debug("Clearing playing_first_track flag.")
                     self.playing_first_track = False
                     self._print_variables(True)

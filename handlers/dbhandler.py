@@ -148,7 +148,10 @@ class DBHandler:
             processor_thread.join()
             # network_thread.join()
             logger.info("Done.")
-        finally:
+            self.is_alive = False
+            raise
+        except Exception as e:
+            logger.exception("Error in DBHandler.", exc_info=e)
             self.is_alive = False
 
     def stop(self):

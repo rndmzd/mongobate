@@ -88,11 +88,12 @@ class AutoDJ:
         self._print_variables()
 
     def _print_variables(self, return_value=None):
-        print()
+        """print()
         print(f"self.playing_first_track: {self.playing_first_track}")
         print(f"self.queued_tracks: {self.queued_tracks}")
         print(return_value)
-        print()
+        print()"""
+        pass
 
     def _select_playback_device(self) -> str:
         try:
@@ -174,7 +175,7 @@ class AutoDJ:
 
     def check_queue_status(self) -> bool:
         try:
-            logger.debug(f"self.queued_tracks: {self.queued_tracks}")
+            # logger.debug(f"self.queued_tracks: {self.queued_tracks}")
 
             if not self.playback_active():
                 if len(self.queued_tracks) > 0:
@@ -187,7 +188,7 @@ class AutoDJ:
                     self._print_variables(True)
                     return True
                 
-                logger.debug("No active playback and queue is empty.")
+                # logger.debug("No active playback and queue is empty.")
 
                 self._print_variables(False)
                 return False
@@ -346,7 +347,7 @@ class AutoDJ:
                 logger.debug("Playback is active.")
                 return True
             else:
-                logger.debug("No active playback.")
+                # logger.debug("No active playback.")
                 return False
         except SpotifyException as e:
             logger.exception("Error checking playback state.", exc_info=e)

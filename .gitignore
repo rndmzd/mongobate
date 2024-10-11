@@ -6,3 +6,4 @@ logs/
 .cache
 commands.yaml
 chatdj/server/*
+.env

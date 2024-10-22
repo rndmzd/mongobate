@@ -49,6 +49,7 @@ class CBEvents:
 
             vip_users = privileged_users["vip"]
             admin_users = privileged_users["admin"]
+            action_users = privileged_users["custom_actions"]
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
@@ -73,7 +74,7 @@ class CBEvents:
             elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
             elif event_method == "chatMessage":
-                process_result = self.chat_message(event_object, admin_users)
+                process_result = self.chat_message(event_object, admin_users, action_users, audio_player)
             else:
                 logger.warning(f"Unknown event method: {event_method}")
                 process_result = False
@@ -387,7 +388,7 @@ class CBEvents:
             logger.exception("Error processing media purchase event", exc_info=e)
             return False
 
-    def chat_message(self, event, admin_users, action_users):
+    def chat_message(self, event, admin_users, action_users, audio_player):
         """
         {
             "message": {
@@ -420,8 +421,19 @@ class CBEvents:
                         command_result = self.commands.try_command(command)
                         logger.debug(f"command_result: {command_result}")
             if 'custom_actions' in self.active_components:
-                if event["user"]["username"] in action_users:
-                    pass
+                username = event['user']['username']
+                if username in action_users.keys():
+                    logger.info(f"Message from action user {username}.")
+                    action_messages = action_users[username]
+                    message = event['message']['message'].strip()
+                    if message in action_messages.keys():
+                        logger.info(f"Message matches action message for user {username}. Executing action.")
+                        audio_file = action_messages[message]
+                        logger.debug(f"audio_file: {audio_file}")
+                        audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                        logger.debug(f"audio_file_path: {audio_file_path}")
+                        logger.info(f"Playing custom action audio for user: {username}")
+                        audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

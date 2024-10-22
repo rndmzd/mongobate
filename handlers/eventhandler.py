@@ -122,7 +122,8 @@ class EventHandler:
             action_users = self.user_collection.find({'action': True, 'active': True})
             for user in action_users:
                 logger.debug(f"user: {user}")
-                self.action_users[user['username']] = True
+            
+                self.action_users[user['username']] = user['custom']
             logger.info(f"Loaded {len(self.action_users)} action users.")
         except Exception as e:
             logger.exception("Error loading action users:", exc_info=e)

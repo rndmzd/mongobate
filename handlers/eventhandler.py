@@ -76,6 +76,10 @@ class EventHandler:
             logger.exception("Could not connect to MongoDB:", exc_info=e)
             raise
 
+        self.vip_users = None
+        self.admin_users = None
+        self.action_users = None
+
         if 'vip_audio' in self.cb_events.active_components:
             # if not audio_device:
             #     logger.error("VIP audio is enabled. Must provide audio device name for output.")

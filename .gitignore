@@ -8,3 +8,4 @@ commands.yaml
 **node_modules/
 **.env
 chatdj/server/
+.env

@@ -149,6 +149,12 @@ class EventHandler:
 
             time.sleep(1)
 
+    def song_queue_check(self):
+        while not self._stop_event.is_set():
+            song_queue_status = self.cb_events.actions.auto_dj.check_queue_status()
+            #logger.debug(f"song_queue_status: {song_queue_status}")
+            time.sleep(5)
+
     def event_processor(self):
         """
         Continuously process events from the event queue.
@@ -202,6 +208,13 @@ class EventHandler:
         self.privileged_user_refresh_thread = threading.Thread(
             target=self.privileged_user_refresh, args=(), daemon=True
         )
+
+        if "chat_auto_dj" in self.cb_events.active_components:
+            logger.info("Starting song queue check thread...")
+            self.song_queue_check_thread = threading.Thread(
+                target=self.song_queue_check, args=(), daemon=True
+            )
+            self.song_queue_check_thread.start()
 
     def stop(self):
         logger.debug("Setting stop event.")

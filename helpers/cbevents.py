@@ -120,26 +120,25 @@ class CBEvents:
                         logger.debug(f'skip_song_result: {skip_song_result}')
 
                 logger.info("Checking if song request.")
-                if not self.checks.is_song_request(event["tip"]["tokens"]):
-                    return True
-                logger.info("Song request detected.")
-                request_count = self.checks.get_request_count(event["tip"]["tokens"])
-                logger.info(f"Request count: {request_count}")
-                song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
-                logger.debug(f'song_extracts:  {song_extracts}')
-                for song_info in song_extracts:
-                    song_uri = self.actions.find_song_spotify(song_info)
-                    logger.debug(f'song_uri: {song_uri}')
-                    if song_uri:
-                        if not self.actions.available_in_market(song_uri):
-                            logger.warning(f"Song not available in user market: {song_info}")
-                            continue
-                        add_queue_result = self.actions.add_song_to_queue(song_uri)
-                        logger.debug(f'add_queue_result: {add_queue_result}')
-                        if not add_queue_result:
-                            logger.error(f"Failed to add song to queue: {song_info}")
-                        else:
-                            logger.info(f"Song added to queue: {song_info}")
+                if self.checks.is_song_request(event["tip"]["tokens"]):
+                    logger.info("Song request detected.")
+                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
+                    logger.info(f"Request count: {request_count}")
+                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
+                    logger.debug(f'song_extracts:  {song_extracts}')
+                    for song_info in song_extracts:
+                        song_uri = self.actions.find_song_spotify(song_info)
+                        logger.debug(f'song_uri: {song_uri}')
+                        if song_uri:
+                            if not self.actions.available_in_market(song_uri):
+                                logger.warning(f"Song not available in user market: {song_info}")
+                                continue
+                            add_queue_result = self.actions.add_song_to_queue(song_uri)
+                            logger.debug(f'add_queue_result: {add_queue_result}')
+                            if not add_queue_result:
+                                logger.error(f"Failed to add song to queue: {song_info}")
+                            else:
+                                logger.info(f"Song added to queue: {song_info}")
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)

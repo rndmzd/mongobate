@@ -34,7 +34,7 @@ class CBEvents:
             actions_args['command_parser'] = True
             self.commands = Commands()
         if 'custom_actions' in self.active_components:
-            pass
+            actions_args['custom_actions'] = True
 
         self.actions = Actions(actions_args)
 
@@ -139,6 +139,12 @@ class CBEvents:
                                 logger.error(f"Failed to add song to queue: {song_info}")
                             else:
                                 logger.info(f"Song added to queue: {song_info}")
+            if 'spray_bottle' in self.active_components:
+                logger.info("Checking if spray bottle tip.")
+                if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
+                    logger.info("Spray bottle tip detected.")
+                    spray_bottle_result = self.actions.trigger_spray()
+                    logger.debug(f'spray_bottle_result: {spray_bottle_result}')
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
@@ -425,14 +431,15 @@ class CBEvents:
                     logger.info(f"Message from action user {username}.")
                     action_messages = action_users[username]
                     message = event['message']['message'].strip()
-                    if message in action_messages.keys():
-                        logger.info(f"Message matches action message for user {username}. Executing action.")
-                        audio_file = action_messages[message]
-                        logger.debug(f"audio_file: {audio_file}")
-                        audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                        logger.debug(f"audio_file_path: {audio_file_path}")
-                        logger.info(f"Playing custom action audio for user: {username}")
-                        audio_player.play_audio(audio_file_path)
+                    for action_message in action_messages.keys():
+                        if action_message in message:
+                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            audio_file = action_messages[message]
+                            logger.debug(f"audio_file: {audio_file}")
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug(f"audio_file_path: {audio_file_path}")
+                            logger.info(f"Playing custom action audio for user: {username}")
+                            audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

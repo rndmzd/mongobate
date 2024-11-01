@@ -1,20 +1,29 @@
 import logging
 from typing import Dict, List, Optional
 
+from . import config
 from rapidfuzz import fuzz
+import requests
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
 class Actions:
-    def __init__(self, chatdj: bool = False, vip_audio: bool = False, command_parser: bool = False):
+    def __init__(self,
+                 chatdj: bool = False,
+                 vip_audio: bool = False,
+                 command_parser: bool = False,
+                 custom_actions: bool = False,
+                 spray_bottle: bool = False):
         self.chatdj_enabled = chatdj
         self.vip_audio_enabled = vip_audio
         self.command_parser_enabled = command_parser
+        self.custom_actions_enabled = custom_actions
+        self.spray_bottle_enabled = spray_bottle
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
-            from . import config, song_cache_collection
+            from . import song_cache_collection
 
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
@@ -23,6 +32,9 @@ class Actions:
                 config.get("Spotify", "redirect_url")
             )
             self.song_cache_collection = song_cache_collection
+        
+        if self.spray_bottle_enabled:
+            self.spray_bottle_url = config.get("General", "spray_bottle_url")
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
@@ -159,4 +171,27 @@ class Actions:
             return self.auto_dj.skip_song()
         except Exception as e:
             logger.exception(f"Error skipping song: {e}")
+            return False
+    
+    def trigger_spray(self) -> bool:
+        """Trigger the spray bottle action."""
+        if not self.spray_bottle_enabled:
+            logger.warning("Spray bottle is not enabled.")
+            return False
+
+        logger.debug('Executing spray bottle action.')
+        try:
+            data = {
+                "sprayAction": True
+            }
+            response = requests.post(self.spray_bottle_url, data=data)
+            if response.status_code == 200:
+                logger.info("Success:", response.json())
+                return True
+            else:
+                logger.error("Request failed with status code:", response.status_code)
+                logger.error("Response:", response.text)
+            return False
+        except Exception as e:
+            logger.exception(f"Error triggering spray bottle: {e}")
             return False

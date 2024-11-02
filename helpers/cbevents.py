@@ -35,6 +35,8 @@ class CBEvents:
             self.commands = Commands()
         if 'custom_actions' in self.active_components:
             actions_args['custom_actions'] = True
+        if 'spray_bottle' in self.active_components:
+            actions_args['spray_bottle'] = True
 
         self.actions = Actions(actions_args)
 

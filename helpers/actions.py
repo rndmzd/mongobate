@@ -1,7 +1,6 @@
 import logging
 from typing import Dict, List, Optional
 
-from . import config
 from rapidfuzz import fuzz
 import requests
 
@@ -23,7 +22,7 @@ class Actions:
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
-            from . import song_cache_collection
+            from . import config, song_cache_collection
 
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
@@ -173,18 +172,18 @@ class Actions:
             logger.exception(f"Error skipping song: {e}")
             return False
     
-    def trigger_spray(self) -> bool:
+    def trigger_spray(self, spray_bottle_url) -> bool:
         """Trigger the spray bottle action."""
-        if not self.spray_bottle_enabled:
-            logger.warning("Spray bottle is not enabled.")
-            return False
+        # if not self.spray_bottle_enabled:
+        #    logger.warning("Spray bottle is not enabled.")
+        #    return False
 
         logger.debug('Executing spray bottle action.')
         try:
             data = {
                 "sprayAction": True
             }
-            response = requests.post(self.spray_bottle_url, data=data)
+            response = requests.post(spray_bottle_url, data=data)
             if response.status_code == 200:
                 logger.info("Success:", response.json())
                 return True

@@ -37,6 +37,7 @@ class CBEvents:
             actions_args['custom_actions'] = True
         if 'spray_bottle' in self.active_components:
             actions_args['spray_bottle'] = True
+            self.spray_bottle_url = config.get("General", "spray_bottle_url")
 
         self.actions = Actions(actions_args)
 
@@ -145,7 +146,7 @@ class CBEvents:
                 logger.info("Checking if spray bottle tip.")
                 if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
                     logger.info("Spray bottle tip detected.")
-                    spray_bottle_result = self.actions.trigger_spray()
+                    spray_bottle_result = self.actions.trigger_spray(self.spray_bottle_url)
                     logger.debug(f'spray_bottle_result: {spray_bottle_result}')
             return True
         except Exception as e:

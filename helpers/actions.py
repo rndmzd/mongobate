@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Optional
 
@@ -13,16 +14,20 @@ class Actions:
                  vip_audio: bool = False,
                  command_parser: bool = False,
                  custom_actions: bool = False,
-                 spray_bottle: bool = False):
+                 spray_bottle: bool = False,
+                 obs_integration: bool = False):
         self.chatdj_enabled = chatdj
         self.vip_audio_enabled = vip_audio
         self.command_parser_enabled = command_parser
         self.custom_actions_enabled = custom_actions
         self.spray_bottle_enabled = spray_bottle
+        self.obs_integration_enabled = obs_integration
+
+        from . import config
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
-            from . import config, song_cache_collection
+            from . import song_cache_collection
 
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
@@ -34,6 +39,10 @@ class Actions:
         
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
+        
+        if self.obs_integration_enabled:
+            from handlers.obshandler import setup_obs_integration
+            self.obs_handler = asyncio.run(setup_obs_integration(config))
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
@@ -193,4 +202,52 @@ class Actions:
             return False
         except Exception as e:
             logger.exception(f"Error triggering spray bottle: {e}")
+            return False
+    
+    def execute_command(self, command: str) -> bool:
+        """Execute a custom command."""
+        if not self.command_parser_enabled:
+            logger.warning("Command parser is not enabled.")
+            return False
+
+        logger.debug(f'Executing custom command: {command}')
+
+        if command[0] == "switchScene":
+            return self.switch_scene(command[1])
+    
+    async def switch_scene(self, scene_name: str) -> bool:
+        """Switch to a specific OBS scene."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS integration is not enabled.")
+            return False
+
+        logger.debug(f'Switching to scene: {scene_name}')
+        try:
+            switch_scene_result = await self.obs_handler.switch_scene(scene_name)
+            if switch_scene_result:
+                return True
+            return False
+        except Exception as e:
+            logger.exception(f"Error switching to scene: {e}")
+            return False
+    
+    async def trigger_overlay(self, scene_name: str, source_name: str, data: dict, duration: int) -> bool:
+        """Trigger an OBS overlay."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS integration is not enabled.")
+            return False
+
+        logger.debug(f'Triggering overlay: {scene_name}, {source_name}, {data}, {duration}')
+        try:
+            trigger_overlay_result = await self.obs_handler.trigger_overlay(
+                scene_name=scene_name,
+                source_name=source_name,
+                data=data,
+                duration=duration
+            )
+            if trigger_overlay_result:
+                return True
+            return False
+        except Exception as e:
+            logger.exception(f"Error triggering overlay: {e}")
             return False

@@ -25,15 +25,13 @@ class Commands:
                 return False
                 #raise exc
     
-    def try_command(self, command):
+    def get_command_action(self, command):
         logger.debug(f"command: {command}")
         if not self.refresh_commands():
-            return False
+            return None
         if command['command'] not in self.commands:
             logger.warning(f"Unrecognized command: {command['command']}.")
-            return False
-        # PROCESS COMMAND HERE
-        ## TODO: User management commands, WTFU command?
+            return None
         logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
-        return True
-        
+        if self.commands[command['command']] == "switchScene":
+            return ('switchScene', self.commands[command['command']]['switchScene'])        

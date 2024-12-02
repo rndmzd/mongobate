@@ -39,7 +39,7 @@ class Checks:
     
     def get_command(self, message):
         if self.command_symbol in message:
-            command_elements = message.split(self.command_symbol)[1].split(" ")[0]
+            command_elements = message.split(self.command_symbol)[1].strip()
             command = {
                 "command": command_elements[0],
                 "args": command_elements[1:] if len(command_elements) > 1 else []

@@ -208,7 +208,7 @@ class Actions:
         """Execute a custom command."""
         if not self.command_parser_enabled:
             logger.warning("Command parser is not enabled.")
-            return False
+            # return False
 
         logger.debug(f'Executing custom command: {command}')
 

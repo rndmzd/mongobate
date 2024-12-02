@@ -32,6 +32,11 @@ class CBEvents:
         if 'command_parser' in self.active_components:
             actions_args['command_parser'] = True
             self.commands = Commands()
+        if 'custom_actions' in self.active_components:
+            actions_args['custom_actions'] = True
+        if 'spray_bottle' in self.active_components:
+            actions_args['spray_bottle'] = True
+            self.spray_bottle_url = config.get("General", "spray_bottle_url")
         if 'obs_integration' in self.active_components:
             self.obs_handler = asyncio.run(setup_obs_integration(config))
             self.overlay_trigger_threshold = config.getint("General", "overlay_trigger_threshold")
@@ -50,6 +55,7 @@ class CBEvents:
 
             vip_users = privileged_users["vip"]
             admin_users = privileged_users["admin"]
+            action_users = privileged_users["custom_actions"]
 
             if event_method == "tip":
                 process_result = self.tip(event_object)
@@ -74,7 +80,7 @@ class CBEvents:
             elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
             elif event_method == "chatMessage":
-                process_result = self.chat_message(event_object, admin_users)
+                process_result = self.chat_message(event_object, admin_users, action_users, audio_player)
             else:
                 logger.warning(f"Unknown event method: {event_method}")
                 process_result = False
@@ -120,6 +126,31 @@ class CBEvents:
                         logger.debug(f'skip_song_result: {skip_song_result}')
 
                 logger.info("Checking if song request.")
+                if self.checks.is_song_request(event["tip"]["tokens"]):
+                    logger.info("Song request detected.")
+                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
+                    logger.info(f"Request count: {request_count}")
+                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
+                    logger.debug(f'song_extracts:  {song_extracts}')
+                    for song_info in song_extracts:
+                        song_uri = self.actions.find_song_spotify(song_info)
+                        logger.debug(f'song_uri: {song_uri}')
+                        if song_uri:
+                            if not self.actions.available_in_market(song_uri):
+                                logger.warning(f"Song not available in user market: {song_info}")
+                                continue
+                            add_queue_result = self.actions.add_song_to_queue(song_uri)
+                            logger.debug(f'add_queue_result: {add_queue_result}')
+                            if not add_queue_result:
+                                logger.error(f"Failed to add song to queue: {song_info}")
+                            else:
+                                logger.info(f"Song added to queue: {song_info}")
+            if 'spray_bottle' in self.active_components:
+                logger.info("Checking if spray bottle tip.")
+                if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
+                    logger.info("Spray bottle tip detected.")
+                    spray_bottle_result = self.actions.trigger_spray(self.spray_bottle_url)
+                    logger.debug(f'spray_bottle_result: {spray_bottle_result}')
                 if self.checks.is_song_request(event["tip"]["tokens"]):
                     logger.info("Song request detected.")
                     request_count = self.checks.get_request_count(event["tip"]["tokens"])
@@ -397,7 +428,7 @@ class CBEvents:
             logger.exception("Error processing media purchase event", exc_info=e)
             return False
 
-    def chat_message(self, event, admin_users):
+    def chat_message(self, event, admin_users, action_users, audio_player):
         """
         {
             "message": {
@@ -429,6 +460,21 @@ class CBEvents:
                         logger.info("Trying command: {command}")
                         command_result = self.commands.try_command(command)
                         logger.debug(f"command_result: {command_result}")
+            if 'custom_actions' in self.active_components:
+                username = event['user']['username']
+                if username in action_users.keys():
+                    logger.info(f"Message from action user {username}.")
+                    action_messages = action_users[username]
+                    message = event['message']['message'].strip()
+                    for action_message in action_messages.keys():
+                        if action_message in message:
+                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            audio_file = action_messages[message]
+                            logger.debug(f"audio_file: {audio_file}")
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug(f"audio_file_path: {audio_file_path}")
+                            logger.info(f"Playing custom action audio for user: {username}")
+                            audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

@@ -114,13 +114,10 @@ class AutoDJ:
                     logger.info(f"Selected device: {device['name']} ({device['id']})")
                     return device['id']
                 except KeyboardInterrupt:
-                    logger.info("User cancelled device selection.")
-                    raise
+                    logger.info("User cancelled device selection. Exiting.")
+                    sys.exit()
                 except (ValueError, IndexError):
                     print("Invalid selection. Please try again.")
-                except KeyboardInterrupt:
-                    logger.info("User aborted selection. Exiting.")
-                    sys.exit()
 
         except Exception as e:
             logger.exception("Failed to select playback device", exc_info=e)

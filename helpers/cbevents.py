@@ -38,8 +38,9 @@ class CBEvents:
             actions_args['spray_bottle'] = True
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
         if 'obs_integration' in self.active_components:
-            self.obs_handler = asyncio.run(setup_obs_integration(config))
-            self.overlay_trigger_threshold = config.getint("General", "overlay_trigger_threshold")
+            actions_args['obs_integration'] = True
+            # self.obs_handler = asyncio.run(setup_obs_integration(config))
+            # self.overlay_trigger_threshold = config.getint("General", "overlay_trigger_threshold")
 
 
         self.actions = Actions(actions_args)
@@ -458,8 +459,12 @@ class CBEvents:
                     command = self.checks.get_command(event["message"]["message"])
                     if command:
                         logger.info("Trying command: {command}")
-                        command_result = self.commands.try_command(command)
-                        logger.debug(f"command_result: {command_result}")
+                        command_action = self.commands.get_command_action(command)
+                        logger.debug(f"command_action: {command_action}")
+                        if command_action:
+                            logger.info(f"Executing command: {command_action}")
+                            command_result = self.actions.execute_command(command_action)
+                            logger.debug(f"command_result: {command_result}")
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():

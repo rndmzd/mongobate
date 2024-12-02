@@ -33,5 +33,5 @@ class Commands:
             logger.warning(f"Unrecognized command: {command['command']}.")
             return None
         logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
-        if self.commands[command['command']] == "switchScene":
+        if "switchScene" in self.commands[command['command']].keys():
             return ('switchScene', self.commands[command['command']]['switchScene'])        

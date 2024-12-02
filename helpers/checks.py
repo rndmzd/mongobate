@@ -38,8 +38,8 @@ class Checks:
         return tip_amount // self.song_cost
     
     def get_command(self, message):
-        if message.startswith(self.command_symbol):
-            command_elements = message.lstrip(self.command_symbol).split(" ")
+        if self.command_symbol in message:
+            command_elements = message.split(self.command_symbol)[1].split(" ")[0]
             command = {
                 "command": command_elements[0],
                 "args": command_elements[1:] if len(command_elements) > 1 else []

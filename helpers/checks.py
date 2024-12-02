@@ -12,6 +12,7 @@ class Checks:
         self.song_cost = self.config.getint("General", "song_cost")
         self.skip_song_cost = self.config.getint("General", "skip_song_cost")
         self.command_symbol = self.config.get("General", "command_symbol")
+        self.spray_bottle_cost = self.config.getint("General", "spray_bottle_cost")
     
     def get_active_components(self):
         active_components = []
@@ -44,3 +45,8 @@ class Checks:
             }
             return command
         return None
+    
+    def is_spray_bottle_tip(self, tip_amount):
+        if tip_amount == self.spray_bottle_cost:
+            return True
+        return False

@@ -42,20 +42,50 @@
     </div>
 
     <script>
-      function triggerOverlay(data) {
-        const overlay = document.getElementById("overlay");
-        document.getElementById("username").textContent = data.username;
-        document.getElementById("amount").textContent = `$${data.amount}`;
-        document.getElementById("message").textContent = data.message;
-
-        overlay.style.opacity = "1";
-        setTimeout(() => {
-          overlay.style.opacity = "0";
-        }, 5000);
+      // Function to get URL parameters
+      function getUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const data = {};
+        for (const [key, value] of params) {
+          data[key] = decodeURIComponent(value);
+        }
+        return data;
       }
 
-      // For testing purposes
-      // triggerOverlay({username: 'TestUser', amount: 50, message: 'Great stream!'});
+      // Function to show the overlay
+      function showOverlay(data) {
+        const overlay = document.getElementById("overlay");
+
+        if (data.username)
+          document.getElementById("username").textContent = data.username;
+        if (data.amount)
+          document.getElementById("amount").textContent = data.amount;
+        if (data.message)
+          document.getElementById("message").textContent = data.message;
+
+        overlay.style.opacity = "1";
+      }
+
+      // Handle the data when page loads
+      window.addEventListener("load", () => {
+        const data = getUrlParams();
+        if (Object.keys(data).length > 0) {
+          showOverlay(data);
+        }
+      });
+
+      // Also handle URL changes without page reload
+      const observer = new MutationObserver(() => {
+        const data = getUrlParams();
+        if (Object.keys(data).length > 0) {
+          showOverlay(data);
+        }
+      });
+
+      observer.observe(document.querySelector("head"), {
+        childList: true,
+        subtree: true,
+      });
     </script>
   </body>
 </html>

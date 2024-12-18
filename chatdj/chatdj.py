@@ -118,8 +118,6 @@ class AutoDJ:
                     raise
                 except (ValueError, IndexError):
                     print("Invalid selection. Please try again.")
-                except KeyboardInterrupt:
-                    logger.info("User aborted selection. Exiting.")
                     sys.exit()
 
         except Exception as e:

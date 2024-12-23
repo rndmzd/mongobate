@@ -118,8 +118,6 @@ class AutoDJ:
                     raise
                 except (ValueError, IndexError):
                     print("Invalid selection. Please try again.")
-                except KeyboardInterrupt:
-                    logger.info("User aborted selection. Exiting.")
                     sys.exit()
 
         except Exception as e:
@@ -160,9 +158,9 @@ class AutoDJ:
             
             # logger.debug(f"track_uri: {track_uri}")
 
-            if not self.playing_first_track:
-                logger.info("Adding track to Spotify queue.")
-                self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
+            # if not self.playing_first_track:
+            #     logger.info("Adding track to Spotify queue.")
+            #     self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
 
             logger.debug(f"queued_tracks: {self.queued_tracks}")
 

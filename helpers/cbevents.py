@@ -1,14 +1,24 @@
 import datetime
 from bson import ObjectId
-import logging
+import structlog
 import simplejson as json
 import threading
 import time
 
 from utils import MongoJSONEncoder
 
-logger = logging.getLogger('mongobate.helpers.cbevents')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.helpers.cbevents')
 
 
 class CBEvents:
@@ -19,7 +29,7 @@ class CBEvents:
         self.checks = Checks()
 
         self.active_components = self.checks.get_active_components()
-        logger.info(f"Active Components: {self.active_components}")
+        logger.info("Active Components", active_components=self.active_components)
 
         actions_args = {}
         if 'chat_auto_dj' in self.active_components:
@@ -27,7 +37,7 @@ class CBEvents:
         if 'vip_audio' in self.active_components:
             actions_args['vip_audio'] = True
             self.vip_audio_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
-            logger.debug(f"self.vip_audio_cooldown_seconds: {self.vip_audio_cooldown_seconds}")
+            logger.debug("VIP Audio Cooldown Seconds", vip_audio_cooldown_seconds=self.vip_audio_cooldown_seconds)
             self.vip_cooldown = {}
             self.vip_audio_directory = config.get("General", "vip_audio_directory")
         if 'command_parser' in self.active_components:
@@ -46,9 +56,9 @@ class CBEvents:
             print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
 
             event_method = event["method"]
-            logger.debug(f"event_method: {event_method}")
+            logger.debug("Event Method", event_method=event_method)
             event_object = event["object"]
-            logger.debug(f"event_object: {event_object}")
+            logger.debug("Event Object", event_object=event_object)
 
             vip_users = privileged_users["vip"]
             admin_users = privileged_users["admin"]
@@ -79,7 +89,7 @@ class CBEvents:
             elif event_method == "chatMessage":
                 process_result = self.chat_message(event_object, admin_users, action_users, audio_player)
             else:
-                logger.warning(f"Unknown event method: {event_method}")
+                logger.warning("Unknown event method", event_method=event_method)
                 process_result = False
 
         except Exception as e:
@@ -120,34 +130,34 @@ class CBEvents:
                     if self.actions.get_playback_state():
                         logger.info("Playback active. Executing skip song.")
                         skip_song_result = self.actions.skip_song()
-                        logger.debug(f'skip_song_result: {skip_song_result}')
+                        logger.debug("Skip Song Result", skip_song_result=skip_song_result)
 
                 logger.info("Checking if song request.")
                 if self.checks.is_song_request(event["tip"]["tokens"]):
                     logger.info("Song request detected.")
                     request_count = self.checks.get_request_count(event["tip"]["tokens"])
-                    logger.info(f"Request count: {request_count}")
+                    logger.info("Request Count", request_count=request_count)
                     song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
-                    logger.debug(f'song_extracts:  {song_extracts}')
+                    logger.debug("Song Extracts", song_extracts=song_extracts)
                     for song_info in song_extracts:
                         song_uri = self.actions.find_song_spotify(song_info)
-                        logger.debug(f'song_uri: {song_uri}')
+                        logger.debug("Song URI", song_uri=song_uri)
                         if song_uri:
                             if not self.actions.available_in_market(song_uri):
-                                logger.warning(f"Song not available in user market: {song_info}")
+                                logger.warning("Song not available in user market", song_info=song_info)
                                 continue
                             add_queue_result = self.actions.add_song_to_queue(song_uri)
-                            logger.debug(f'add_queue_result: {add_queue_result}')
+                            logger.debug("Add Queue Result", add_queue_result=add_queue_result)
                             if not add_queue_result:
-                                logger.error(f"Failed to add song to queue: {song_info}")
+                                logger.error("Failed to add song to queue", song_info=song_info)
                             else:
-                                logger.info(f"Song added to queue: {song_info}")
+                                logger.info("Song added to queue", song_info=song_info)
             if 'spray_bottle' in self.active_components:
                 logger.info("Checking if spray bottle tip.")
                 if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
                     logger.info("Spray bottle tip detected.")
                     spray_bottle_result = self.actions.trigger_spray(self.spray_bottle_url)
-                    logger.debug(f'spray_bottle_result: {spray_bottle_result}')
+                    logger.debug("Spray Bottle Result", spray_bottle_result=spray_bottle_result)
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
@@ -285,17 +295,17 @@ class CBEvents:
             if 'vip_audio' in self.active_components:
                 username = event['user']['username']
                 if username in vip_users.keys():
-                    logger.info(f"VIP user {username} entered the room.")
+                    logger.info("VIP user entered the room", username=username)
                     current_time = time.time()
                     if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_audio_cooldown_seconds:
-                        logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
+                        logger.info("VIP user not in cooldown period. Playing user audio.", username=username)    
                         audio_file = vip_users[username]
-                        logger.debug(f"audio_file: {audio_file}")
+                        logger.debug("Audio File", audio_file=audio_file)
                         audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                        logger.debug(f"audio_file_path: {audio_file_path}")
-                        logger.info(f"Playing VIP audio for user: {username}")
+                        logger.debug("Audio File Path", audio_file_path=audio_file_path)
+                        logger.info("Playing VIP audio for user", username=username)
                         audio_player.play_audio(audio_file_path)
-                        logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
+                        logger.info("VIP audio played for user. Resetting cooldown.", username=username)
                         self.vip_cooldown[username] = current_time
             return True
         except Exception as e:
@@ -422,29 +432,28 @@ class CBEvents:
 
             if 'command_parser' in self.active_components:
                 if event["user"]["username"] in admin_users:
-                    logger.info(f"Admin message: {event['message']['message']}")
+                    logger.info("Admin message", message=event['message']['message'])
                     command = self.checks.get_command(event["message"]["message"])
                     if command:
-                        logger.info("Trying command: {command}")
+                        logger.info("Trying command", command=command)
                         command_result = self.commands.try_command(command)
-                        logger.debug(f"command_result: {command_result}")
+                        logger.debug("Command Result", command_result=command_result)
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():
-                    logger.info(f"Message from action user {username}.")
+                    logger.info("Message from action user", username=username)
                     action_messages = action_users[username]
                     message = event['message']['message'].strip()
                     for action_message in action_messages.keys():
                         if action_message in message:
-                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            logger.info("Message matches action message for user. Executing action.", username=username)
                             audio_file = action_messages[message]
-                            logger.debug(f"audio_file: {audio_file}")
+                            logger.debug("Audio File", audio_file=audio_file)
                             audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                            logger.debug(f"audio_file_path: {audio_file_path}")
-                            logger.info(f"Playing custom action audio for user: {username}")
+                            logger.debug("Audio File Path", audio_file_path=audio_file_path)
+                            logger.info("Playing custom action audio for user", username=username)
                             audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)
             return False
-    

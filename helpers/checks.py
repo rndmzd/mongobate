@@ -1,7 +1,17 @@
-import logging
+import structlog
 
-logger = logging.getLogger('mongobate.helpers.checks')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.helpers.checks')
 
 class Checks:
     def __init__(self):

@@ -1,12 +1,22 @@
-import logging
+import structlog
 import sys
 from threading import Thread, Event
 
 import pygame
 import pygame._sdl2.audio as sdl2_audio
 
-logger = logging.getLogger('mongobate.chataudio.audioplayer')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.chataudio.audioplayer')
 
 class AudioPlayer:
     def __init__(self, device_name=None):
@@ -16,7 +26,7 @@ class AudioPlayer:
         if not self.device_name:
             self.device_name = self.user_select_audio_device()
         device_select_result = self.set_output_device(self.device_name)
-        logger.debug(f"device_select_result: {device_select_result}")
+        logger.debug("Device selection result", device_select_result=device_select_result)
         self.play_thread = None
         self.stop_event = Event()
 
@@ -25,7 +35,7 @@ class AudioPlayer:
         if init_by_me:
             pygame.mixer.init()
         devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
-        logger.debug(f"devices: {devices}")
+        logger.debug("Output devices", devices=devices)
         if init_by_me:
             pygame.mixer.quit()
         return devices
@@ -44,9 +54,9 @@ class AudioPlayer:
         except KeyboardInterrupt:
             logger.info("User aborted selection. Exiting.")
             sys.exit()
-        logger.debug(f"user_selection: {user_selection}")
+        logger.debug("User selection", user_selection=user_selection)
         device_num = user_selection - 1
-        logger.debug(f"device_num: {device_num}")
+        logger.debug("Device number", device_num=device_num)
         return output_devices[device_num]
 
     def set_output_device(self, device_name):
@@ -56,9 +66,9 @@ class AudioPlayer:
                 pygame.mixer.quit()
                 pygame.mixer.init(devicename=device_name)
                 self.current_device = device_name
-                logger.info(f"Set output device to: {device_name}")
+                logger.info("Set output device", device_name=device_name)
                 return True
-        logger.warning(f"Device '{device_name}' not found. Using default device.")
+        logger.warning("Device not found, using default", device_name=device_name)
         return False
 
     def play_audio(self, file_path):
@@ -77,7 +87,7 @@ class AudioPlayer:
             while pygame.mixer.music.get_busy() and not self.stop_event.is_set():
                 pygame.time.Clock().tick(10)
         except Exception as e:
-            logger.exception(f"Error playing audio file: {file_path}", exc_info=e)
+            logger.exception("Error playing audio file", file_path=file_path, exc_info=e)
         finally:
             pygame.mixer.music.stop()
 

@@ -1,11 +1,13 @@
 import configparser
-import logging
-from logging.handlers import RotatingFileHandler
 import os
 import sys
 import time
-
 from multiprocessing import Event, Process
+
+import structlog
+from structlog.processors import JSONRenderer
+from structlog.stdlib import LoggerFactory, add_log_level, filter_by_level
+from structlog.threadlocal import wrap_logger
 
 from handlers import DBHandler, EventHandler
 
@@ -21,25 +23,20 @@ log_backup_count = config.getint("Logging", "log_backup_count")
 if not os.path.exists(os.path.dirname(log_file)):
     os.makedirs(os.path.dirname(log_file))
 
-logger = logging.getLogger('mongobate')
-logger.setLevel(logging.DEBUG)
-
-stream_handler = logging.StreamHandler()
-file_handler = RotatingFileHandler(
-    log_file,
-    maxBytes=log_max_size_mb * 1024 * 1024,
-    backupCount=log_backup_count,
-    encoding='utf-8'
+structlog.configure(
+    processors=[
+        filter_by_level,
+        add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=LoggerFactory(),
+    wrapper_class=wrap_logger,
+    cache_logger_on_first_use=True,
 )
 
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-stream_handler.setFormatter(formatter)
-file_handler.setFormatter(formatter)
-
-logger.addHandler(stream_handler)
-logger.addHandler(file_handler)
-
+logger = structlog.get_logger('mongobate')
 
 if __name__ == '__main__':
     events_api_url = config.get("Events API", "url")

@@ -1,16 +1,24 @@
-import logging
 import queue
 import threading
 import time
+import urllib.parse
 
-
+import structlog
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-import urllib.parse
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
 
-logger = logging.getLogger('mongobate.handlers.eventhandler')
-logger.setLevel(logging.DEBUG)
+logger = structlog.get_logger('mongobate.handlers.eventhandler')
 
 
 class EventHandler:
@@ -53,7 +61,7 @@ class EventHandler:
 
         try:
             if self.mongo_connection_uri:
-                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                logger.debug("Connecting with URI", uri=self.mongo_connection_uri)
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
                 self.mongo_client = MongoClient(
@@ -73,7 +81,7 @@ class EventHandler:
             else:
                 self.user_collection = None
         except ConnectionFailure as e:
-            logger.exception("Could not connect to MongoDB:", exc_info=e)
+            logger.exception("Could not connect to MongoDB", exc_info=e)
             raise
 
         self.vip_users = None
@@ -105,32 +113,31 @@ class EventHandler:
         try:
             vip_users = self.user_collection.find({'vip': True, 'active': True})
             for user in vip_users:
-                logger.debug(f"user: {user}")
+                logger.debug("VIP user loaded", user=user)
                 self.vip_users[user['username']] = user['audio_file']
-            logger.info(f"Loaded {len(self.vip_users)} VIP users.")
+            logger.info("Loaded VIP users", count=len(self.vip_users))
         except Exception as e:
-            logger.exception("Error loading VIP users:", exc_info=e)
+            logger.exception("Error loading VIP users", exc_info=e)
     
     def load_admin_users(self):
         try:
             admin_users = self.user_collection.find({'admin': True, 'active': True})
             for user in admin_users:
-                logger.debug(f"user: {user}")
+                logger.debug("Admin user loaded", user=user)
                 self.admin_users[user['username']] = True
-            logger.info(f"Loaded {len(self.admin_users)} admin users.")
+            logger.info("Loaded admin users", count=len(self.admin_users))
         except Exception as e:
-            logger.exception("Error loading admin users:", exc_info=e)
+            logger.exception("Error loading admin users", exc_info=e)
 
     def load_action_users(self):
         try:
             action_users = self.user_collection.find({'action': True, 'active': True})
             for user in action_users:
-                logger.debug(f"user: {user}")
-            
+                logger.debug("Action user loaded", user=user)
                 self.action_users[user['username']] = user['custom']
-            logger.info(f"Loaded {len(self.action_users)} action users.")
+            logger.info("Loaded action users", count=len(self.action_users))
         except Exception as e:
-            logger.exception("Error loading action users:", exc_info=e)
+            logger.exception("Error loading action users", exc_info=e)
 
     def privileged_user_refresh(self):
         last_load_vip = time.time()
@@ -168,12 +175,12 @@ class EventHandler:
                     "custom_actions": self.action_users
                 }
                 process_result = self.cb_events.process_event(event, privileged_users, self.audio_player)
-                logger.debug(f"process_result: {process_result}")
+                logger.debug("Event processed", result=process_result)
                 self.event_queue.task_done()
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
             except Exception as e:
-                logger.exception("Error in event processor:" , exc_info=e)
+                logger.exception("Error in event processor", exc_info=e)
 
     def watch_changes(self):
         try:
@@ -186,52 +193,52 @@ class EventHandler:
                         doc = change["fullDocument"]
                         self.event_queue.put(doc)
         except Exception as e:
-            logger.exception("An error occurred while watching changes: %s", exc_info=e)
+            logger.exception("An error occurred while watching changes", exc_info=e)
         finally:
             if not self._stop_event.is_set():
                 self.cleanup()
 
     def run(self):
-        logger.info("Starting change stream watcher thread...")
+        logger.info("Starting change stream watcher thread")
         self.watcher_thread = threading.Thread(
             target=self.watch_changes, args=(), daemon=True
         )
         self.watcher_thread.start()
 
-        logger.info("Starting event processing thread...")
+        logger.info("Starting event processing thread")
         self.event_thread = threading.Thread(
             target=self.event_processor, args=(), daemon=True
         )
         self.event_thread.start()
 
-        logger.info("Starting privileged user refresh thread...")
+        logger.info("Starting privileged user refresh thread")
         self.privileged_user_refresh_thread = threading.Thread(
             target=self.privileged_user_refresh, args=(), daemon=True
         )
 
         if "chat_auto_dj" in self.cb_events.active_components:
-            logger.info("Starting song queue check thread...")
+            logger.info("Starting song queue check thread")
             self.song_queue_check_thread = threading.Thread(
                 target=self.song_queue_check, args=(), daemon=True
             )
             self.song_queue_check_thread.start()
 
     def stop(self):
-        logger.debug("Setting stop event.")
+        logger.debug("Setting stop event")
         self._stop_event.set()
         for thread in [self.watcher_thread, self.event_thread, self.privileged_user_refresh_thread]:
             if thread.is_alive():
-                logger.debug(f"Joining {thread.name} thread.")
+                logger.debug("Joining thread", thread_name=thread.name)
                 thread.join()
-        logger.debug("Checking if MongoDB connection still active.")
+        logger.debug("Checking if MongoDB connection still active")
         self.cleanup()
 
     def cleanup(self):
         if self.mongo_client:
-            logger.info("Closing MongoDB connection...")
+            logger.info("Closing MongoDB connection")
             self.mongo_client.close()
 
-        logger.info("Clean-up complete.")
+        logger.info("Clean-up complete")
 
 if __name__ == "__main__":
     import configparser

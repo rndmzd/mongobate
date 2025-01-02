@@ -1,5 +1,5 @@
 import configparser
-import logging
+import structlog
 import os
 from pathlib import Path
 from pymongo import MongoClient
@@ -9,8 +9,18 @@ from helpers.checks import Checks
 from helpers.cbevents import CBEvents
 from helpers.commands import Commands
 
-logger = logging.getLogger('mongobate.chatdj')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.helpers.__init__')
 
 config_path = Path(__file__).parent.parent / 'config.ini'
 

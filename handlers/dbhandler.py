@@ -1,19 +1,32 @@
 import datetime
-import logging
 import queue
 import threading
 import time
-
-import requests
-from requests.exceptions import RequestException
-
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
-
 import urllib.parse
 
-logger = logging.getLogger('mongobate.handlers.dbhandler')
-logger.setLevel(logging.DEBUG)
+import requests
+import structlog
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+from requests.exceptions import RequestException
+from structlog.processors import JSONRenderer
+from structlog.stdlib import LoggerFactory, add_log_level, filter_by_level
+from structlog.threadlocal import wrap_logger
+
+structlog.configure(
+    processors=[
+        filter_by_level,
+        add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=LoggerFactory(),
+    wrapper_class=wrap_logger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.handlers.dbhandler')
 
 
 class DBHandler:
@@ -45,7 +58,8 @@ class DBHandler:
 
         self.mongo_connection_uri = None
         if aws_key and aws_secret:
-            logger.debug("Using AWS authentication for MongoDB.")
+            logger.debug("Using AWS authentication for MongoDB.",
+                         aws_key=aws_key, aws_secret=aws_secret)
 
             aws_key_pe = urllib.parse.quote_plus(aws_key)
             aws_secret_pe = urllib.parse.quote_plus(aws_secret)
@@ -62,7 +76,7 @@ class DBHandler:
     def connect_to_mongodb(self):
         try:
             if self.mongo_connection_uri:
-                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                logger.debug("Connecting with URI", uri=self.mongo_connection_uri)
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
                 self.mongo_client = MongoClient(
@@ -75,17 +89,17 @@ class DBHandler:
             self.mongo_db = self.mongo_client[self.mongo_db]
             self.event_collection = self.mongo_db[self.mongo_collection]
         except ConnectionFailure as e:
-            logger.exception(f"Could not connect to MongoDB: {e}")
+            logger.exception("Could not connect to MongoDB", exc_info=e)
             raise
 
     def archive_event(self, event):
         try:
             event['timestamp'] = datetime.datetime.now(tz=datetime.timezone.utc)
-            logger.debug(f"event['timestamp']: {event['timestamp']}")
+            logger.debug("Archiving event", event=event)
             result = self.event_collection.insert_one(event)
-            logger.debug(f"result.inserted_id: {result.inserted_id}")
+            logger.debug("Event archived", inserted_id=result.inserted_id)
         except Exception as e:
-            logger.exception(f"Error archiving event: {event}", exc_info=e)
+            logger.exception("Error archiving event", event=event, exc_info=e)
 
     def event_processor(self):
         """
@@ -117,10 +131,9 @@ class DBHandler:
                         self.event_queue.put(event)
                     url_next = data["nextUrl"]
                 else:
-                    logger.error(
-                        f"Error: Received status code {response.status_code}")
+                    logger.error("Received non-200 status code", status_code=response.status_code)
             except RequestException as e:
-                logger.error(f"Request failed: {e}")
+                logger.error("Request failed", exc_info=e)
 
             time.sleep(self.interval)
 

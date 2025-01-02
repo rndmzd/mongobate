@@ -1,10 +1,19 @@
 import configparser
-import logging
-
+import structlog
 import yaml
 
-logger = logging.getLogger('mongobate.helpers.commands')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.helpers.commands')
 
 
 class Commands:
@@ -23,17 +32,15 @@ class Commands:
             except yaml.YAMLError as exc:
                 logger.error(exc)
                 return False
-                #raise exc
     
     def try_command(self, command):
-        logger.debug(f"command: {command}")
+        logger.debug("Trying command", command=command)
         if not self.refresh_commands():
             return False
         if command['command'] not in self.commands:
-            logger.warning(f"Unrecognized command: {command['command']}.")
+            logger.warning("Unrecognized command", command=command['command'])
             return False
         # PROCESS COMMAND HERE
         ## TODO: User management commands, WTFU command?
-        logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
+        logger.debug("Command details", command_details=self.commands[command['command']])
         return True
-        

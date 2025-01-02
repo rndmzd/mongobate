@@ -1,4 +1,4 @@
-import logging
+import structlog
 from typing import List, Dict, Optional
 import sys
 import time
@@ -6,8 +6,18 @@ import time
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
 
-logger = logging.getLogger('mongobate.chatdj')
-logger.setLevel(logging.DEBUG)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger('mongobate.chatdj')
 
 class SongExtractor:
     def __init__(self, api_key):
@@ -30,7 +40,7 @@ class SongExtractor:
                 model="gpt-4o"
             )
 
-            logger.debug(f"response: {response}")
+            logger.debug('Extracted songs', response=response)
 
             song_titles_response = response.choices[0].message.content.strip().split('\n')
             song_titles = []
@@ -45,8 +55,7 @@ class SongExtractor:
                         }
                     )
                 else:
-                    logger.warning(f"Unexpected format in response: {resp}")
-                    #if len(song_titles_response) == 1 and song_count == 1:
+                    logger.warning('Unexpected format in response', response=resp)
                     if song_count == 1:
                         logger.warning("Returning original request text as song title.")
                         song_titles.append(
@@ -57,8 +66,7 @@ class SongExtractor:
                             }
                         )
 
-            logger.debug(f'song_titles: {song_titles}')
-            logger.debug(f"len(song_titles): {len(song_titles)}")
+            logger.debug('Song titles extracted', song_titles=song_titles)
 
             return song_titles
 
@@ -88,17 +96,12 @@ class AutoDJ:
         self._print_variables()
 
     def _print_variables(self, return_value=None):
-        """print()
-        print(f"self.playing_first_track: {self.playing_first_track}")
-        print(f"self.queued_tracks: {self.queued_tracks}")
-        print(return_value)
-        print()"""
         pass
 
     def _select_playback_device(self) -> str:
         try:
             devices = self.spotify.devices()['devices']
-            logger.debug(f"Available devices: {devices}")
+            logger.debug("Available devices", devices=devices)
 
             if not devices:
                 raise ValueError("No available Spotify devices found.")
@@ -111,7 +114,7 @@ class AutoDJ:
                 try:
                     selection = int(input("\nChoose playback device number: "))
                     device = devices[selection - 1]
-                    logger.info(f"Selected device: {device['name']} ({device['id']})")
+                    logger.info("Selected device", device_name=device['name'], device_id=device['id'])
                     return device['id']
                 except KeyboardInterrupt:
                     logger.info("User cancelled device selection.")
@@ -128,9 +131,9 @@ class AutoDJ:
         """Search Spotify for a specific song."""
         try:
             find_song_query = f"{song_info['artist']} {song_info['song']}"
-            logger.debug(f'find_song_query: {find_song_query}')
-            results = self.spotify.search(q=find_song_query, type='track')#, limit=1)
-            logger.debug(f'results: {results}')
+            logger.debug("Find song query", query=find_song_query)
+            results = self.spotify.search(q=find_song_query, type='track')
+            logger.debug("Find song results", results=results)
             return results
         except SpotifyException as e:
             logger.exception("Failed to find song", exc_info=e)
@@ -138,31 +141,13 @@ class AutoDJ:
 
     def add_song_to_queue(self, track_uri: str) -> bool:
         try:
-            logger.debug("Adding track to internal queue.")
+            logger.debug("Adding track to internal queue", track_uri=track_uri)
             self.queued_tracks.append(track_uri)
 
             if not self.playback_active() and len(self.queued_tracks) == 1:
                 self.playing_first_track = True
-                
-                """logger.info("Starting playback.")
-                self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
-                logger.info("Started playback. Checking if current song matches request.")
-                currently_playing = self.spotify.currently_playing()['item']['uri']
-                if currently_playing != track_uri:
-                    logger.info(f"Currently track does not match request: {currently_playing}. Skipping.")
-                    self.skip_song()
 
-                self._print_variables(True)
-
-                return True"""
-            
-            # logger.debug(f"track_uri: {track_uri}")
-
-            # if not self.playing_first_track:
-            #     logger.info("Adding track to Spotify queue.")
-            #     self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
-
-            logger.debug(f"queued_tracks: {self.queued_tracks}")
+            logger.debug("Queued tracks", queued_tracks=self.queued_tracks)
 
             self._print_variables(True)
             return True
@@ -173,84 +158,27 @@ class AutoDJ:
 
     def check_queue_status(self) -> bool:
         try:
-            # logger.debug(f"self.queued_tracks: {self.queued_tracks}")
-
             if not self.playback_active():
                 if len(self.queued_tracks) > 0:
                     logger.info("Queue populated but playback is not active. Starting playback.")
                     popped_track = self.queued_tracks.pop(0)
-                    logger.debug(f"popped_track: {popped_track}")
+                    logger.debug("Popped track", track_uri=popped_track)
                     self.spotify.start_playback(device_id=self.playback_device, uris=[popped_track])
                     logger.debug("Clearing playing_first_track flag.")
                     self.playing_first_track = False
                     self._print_variables(True)
                     return True
-                
-                # logger.debug("No active playback and queue is empty.")
 
                 self._print_variables(False)
                 return False
 
-            # playback = self.spotify.current_playback()
-            # logger.debug(f"playback: {playback}")
-
-            # if not playback or not playback['is_playing']:
-                """if self.playing_first_track:
-                    logger.info("Finished playing queued track.")
-                    self.queued_tracks.pop(0)
-                    self.playing_first_track = False"""
-
-                #if not self.queued_tracks:
-                """logger.info("Playback ended and queue is empty.")
-                self.clear_playback_context()
-                logger.debug("Setting queue to inactive.")
-                self.queue_active = False
-                self._print_variables(True)
-                return True"""
-                # else:
-                #     logger.info("Playback ended, but queue is not empty. Starting next track.")
-                #     self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks[0]])
-
-            # elif playback['item']:
-
-            # if self.playing_first_track:
-            #     logger.info("Beginning playback of first queued track.")
-            #     self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks.pop(0)])
-            #     logger.debug("Clearing playing_first_track flag.")
-            #     self.playing_first_track = False
-            """else:
-                playback = self.spotify.current_playback()
-                logger.debug(f"playback: {playback}")
-                current_track = playback['item']['uri']
-                logger.debug(f"current_track: {current_track}")
-
-                logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
-                if self.playing_first_track and current_track != self.queued_tracks[0]:
-                    logger.info("Finished playing queued track.")
-                    self.queued_tracks.pop(0)
-                    self.playing_first_track = False
-                elif not self.playing_first_track and self.queued_tracks and current_track == self.queued_tracks[0]:
-                    logger.info(f"Now playing queued track: {current_track}")
-                    self.playing_first_track = True
-                    # self.queued_tracks.pop(0)
-                elif not self.queued_tracks:
-                    logger.info("Playing non-queued track, clearing context.")
-                    self.clear_playback_context()
-                    return True
-                else:
-                    logger.info("Playing unexpected track, skipping.")
-                    self.skip_song()
-
-            else:
-                logger.warning("Unknown playback state.")"""
-            
             if self.queued_tracks:
-                # Check if the current track is the first track in the queue
-                logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
-                if (current_track := self.spotify.current_playback()['item']['uri']) == self.queued_tracks[0]:
-                    logger.info(f"Now playing queued track: {current_track}")
+                current_track = self.spotify.current_playback()['item']['uri']
+                logger.debug("Current track", track_uri=current_track)
+                if current_track == self.queued_tracks[0]:
+                    logger.info("Now playing queued track", track_uri=current_track)
                     self.queued_tracks.pop(0)
-            
+
             self._print_variables(True)
             return True
 
@@ -268,15 +196,12 @@ class AutoDJ:
             max_attempts = 5
 
             while True:
-                # Get the current queue
                 queue = self.spotify.queue()
-                
-                # If the queue is empty, we're done
+
                 if len(queue['queue']) == 0:
                     print("Queue is now empty")
                     break
-                
-                # Check if we're stuck on the same track
+
                 current_track = queue['queue'][0]['uri']
                 if current_track == previous_track:
                     attempts += 1
@@ -286,31 +211,28 @@ class AutoDJ:
                 else:
                     attempts = 0
 
-                # Skip to the next track
                 try:
                     self.spotify.next_track()
                     print(f"Skipped track: {queue['queue'][0]['name']}")
-                    # Wait a short time to allow the API to update
                     time.sleep(1)
                 except SpotifyException as e:
-                    logger.error(f"Error skipping track: {e}")
+                    logger.error("Error skipping track", exc_info=e)
                     break
 
                 previous_track = current_track
 
-            # After clearing the queue, pause playback
             try:
                 self.spotify.pause_playback()
                 logger.info("Playback paused.")
             except SpotifyException as e:
-                logger.error(f"Error pausing playback: {e}")
-            
+                logger.error("Error pausing playback", exc_info=e)
+
             self.playing_first_track = False
             self.queued_tracks.clear()
 
             self._print_variables(True)
             return True
-        
+
         except SpotifyException as e:
             logger.exception("Failed to clear playback context.", exc_info=e)
             return False
@@ -318,7 +240,7 @@ class AutoDJ:
     def get_user_market(self):
         try:
             user_info = self.spotify.me()
-            logger.debug(f"user_info: {user_info}")
+            logger.debug("User info", user_info=user_info)
             return user_info['country']
         except SpotifyException as e:
             logger.exception("Failed to get user market.", exc_info=e)
@@ -326,26 +248,18 @@ class AutoDJ:
     def get_song_markets(self, track_uri):
         try:
             if track_info := self.spotify.track(track_uri):
-                logger.debug(f"track_info: {track_info}")
+                logger.debug("Track info", track_info=track_info)
                 return track_info['available_markets']
             return []
         except SpotifyException as e:
             logger.exception("Failed to get song markets.", exc_info=e)
 
     def playback_active(self) -> bool:
-        """
-        Check if there's active playback on the user's Spotify account.
-        
-        Returns:
-            bool: True if there's active playback, False otherwise.
-        """
         try:
-            # playback_state = self.spotify.current_playback()
             if (playback_state := self.spotify.current_playback()) and playback_state['is_playing']:
                 logger.debug("Playback is active.")
                 return True
             else:
-                # logger.debug("No active playback.")
                 return False
         except SpotifyException as e:
             logger.exception("Error checking playback state.", exc_info=e)
@@ -369,8 +283,6 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    logging.basicConfig()
-
     song_extractor = SongExtractor(os.getenv('OPENAI_API_KEY'))
     auto_dj = AutoDJ(
         os.getenv('SPOTIFY_CLIENT_ID'),
@@ -380,12 +292,6 @@ if __name__ == "__main__":
 
     queue = auto_dj.spotify.queue()
     print()
-    #pprint(queue)
-    #print()
-    #pprint(queue['currently_playing'])
-    #print()
-    #pprint(queue['queue'])
-    print()
     print(len(queue['queue']))
     [print(i['name']) for i in queue['queue']]
 
@@ -393,18 +299,9 @@ if __name__ == "__main__":
 
     queue = auto_dj.spotify.queue()
     print()
-    #pprint(queue)
-    #print()
-    #pprint(queue['currently_playing'])
-    #print()
-    #pprint(queue['queue'])
-    print()
     print(len(queue['queue']))
     [print(i['name']) for i in queue['queue']]
-    
-    # sys.exit()
 
-    # Example usage
     message = "Play Dancing Queen by ABBA and Bohemian Rhapsody by Queen"
     songs = song_extractor.extract_songs(message, song_count=2)
 
@@ -415,7 +312,6 @@ if __name__ == "__main__":
             else:
                 logger.warning("Song not available in user's market. Skipping.")
 
-    # Main loop to check queue status
     try:
         while True:
             if not auto_dj.check_queue_status():

@@ -35,6 +35,9 @@ class Actions:
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
 
+        if self.custom_actions_enabled:
+            self.custom_action_url = config.get("Custom Actions", "url")
+
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
         try:
@@ -193,4 +196,36 @@ class Actions:
             return False
         except Exception as e:
             logger.exception(f"Error triggering spray bottle: {e}")
+            return False
+
+    def send_post_request(self, url: str, data: Dict) -> bool:
+        """Send a post request to a specified URL."""
+        try:
+            response = requests.post(url, json=data)
+            if response.status_code == 200:
+                logger.info("Post request successful:", response.json())
+                return True
+            else:
+                logger.error("Post request failed with status code:", response.status_code)
+                logger.error("Response:", response.text)
+            return False
+        except Exception as e:
+            logger.exception(f"Error sending post request: {e}")
+            return False
+
+    def trigger_custom_action(self, command: str) -> bool:
+        """Trigger a custom action based on a command."""
+        if not self.custom_actions_enabled:
+            logger.warning("Custom actions are not enabled.")
+            return False
+
+        logger.debug('Executing custom action.')
+        try:
+            if command == ""
+            data = {
+                "command": command
+            }
+            return self.send_post_request(self.custom_action_url, data)
+        except Exception as e:
+            logger.exception(f"Error triggering custom action: {e}")
             return False

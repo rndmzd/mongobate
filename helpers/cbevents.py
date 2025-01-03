@@ -63,7 +63,7 @@ class CBEvents:
             elif event_method == "fanclubJoin":
                 process_result = self.fanclub_join(event_object)
             elif  event_method == "privateMessage":
-                process_result = self.private_message(event_object)
+                process_result = self.private_message(event_object, action_users)
             elif event_method == "roomSubjectChange":
                 process_result = self.room_subject_change(event_object)
             elif event_method == "userEnter":
@@ -219,7 +219,7 @@ class CBEvents:
             logger.exception("Error processing fanclub join event", exc_info=e)
             return False
     
-    def private_message(self, event):
+    def private_message(self, event, action_users):
         """
         {
             "message": {
@@ -244,6 +244,16 @@ class CBEvents:
         try:
             # Process private message event
             logger.info("Private message event received.")
+            if 'custom_actions' in self.active_components:
+                username = event['user']['username']
+                if username in action_users.keys():
+                    logger.info(f"Message from action user {username}.")
+                    action_messages = action_users[username]
+                    message = event['message']['message'].strip()
+                    for action_message in action_messages.keys():
+                        if action_message in message:
+                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            self.actions.trigger_custom_action(action_messages[action_message])
             return True
         except Exception as e:
             logger.exception("Error processing private message event", exc_info=e)
@@ -437,12 +447,7 @@ class CBEvents:
                     for action_message in action_messages.keys():
                         if action_message in message:
                             logger.info(f"Message matches action message for user {username}. Executing action.")
-                            audio_file = action_messages[message]
-                            logger.debug(f"audio_file: {audio_file}")
-                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                            logger.debug(f"audio_file_path: {audio_file_path}")
-                            logger.info(f"Playing custom action audio for user: {username}")
-                            audio_player.play_audio(audio_file_path)
+                            self.actions.trigger_custom_action(action_messages[action_message])
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

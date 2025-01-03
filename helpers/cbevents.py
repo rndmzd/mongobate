@@ -6,6 +6,7 @@ import threading
 import time
 
 from utils import MongoJSONEncoder
+from chataudio.audioplayer import AudioPlayer
 
 logger = logging.getLogger('mongobate.helpers.cbevents')
 logger.setLevel(logging.DEBUG)
@@ -40,8 +41,9 @@ class CBEvents:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
 
         self.actions = Actions(actions_args)
+        self.audio_player = AudioPlayer()
 
-    def process_event(self, event, privileged_users, audio_player):
+    def process_event(self, event, privileged_users):
         try:
             print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
 
@@ -67,7 +69,7 @@ class CBEvents:
             elif event_method == "roomSubjectChange":
                 process_result = self.room_subject_change(event_object)
             elif event_method == "userEnter":
-                process_result = self.user_enter(event_object, vip_users, audio_player)
+                process_result = self.user_enter(event_object, vip_users)
             elif event_method == "userLeave":
                 process_result = self.user_leave(event_object)
             elif event_method == "follow":
@@ -77,7 +79,7 @@ class CBEvents:
             elif event_method == "mediaPurchase":
                 process_result = self.media_purchase(event_object)
             elif event_method == "chatMessage":
-                process_result = self.chat_message(event_object, admin_users, action_users, audio_player)
+                process_result = self.chat_message(event_object, admin_users, action_users)
             else:
                 logger.warning(f"Unknown event method: {event_method}")
                 process_result = False
@@ -274,7 +276,7 @@ class CBEvents:
             logger.exception("Error processing room subject change event", exc_info=e)
             return False
     
-    def user_enter(self, event, vip_users, audio_player):
+    def user_enter(self, event, vip_users):
         """
         {
             "broadcaster": "testuser",
@@ -304,7 +306,7 @@ class CBEvents:
                         audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
                         logger.debug(f"audio_file_path: {audio_file_path}")
                         logger.info(f"Playing VIP audio for user: {username}")
-                        audio_player.play_audio(audio_file_path)
+                        self.audio_player.play_audio(audio_file_path)
                         logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
                         self.vip_cooldown[username] = current_time
             return True
@@ -406,7 +408,7 @@ class CBEvents:
             logger.exception("Error processing media purchase event", exc_info=e)
             return False
 
-    def chat_message(self, event, admin_users, action_users, audio_player):
+    def chat_message(self, event, admin_users, action_users):
         """
         {
             "message": {
@@ -447,9 +449,13 @@ class CBEvents:
                     for action_message in action_messages.keys():
                         if action_message in message:
                             logger.info(f"Message matches action message for user {username}. Executing action.")
-                            self.actions.trigger_custom_action(action_messages[action_message])
+                            audio_file = action_messages[message]
+                            logger.debug(f"audio_file: {audio_file}")
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug(f"audio_file_path: {audio_file_path}")
+                            logger.info(f"Playing custom action audio for user: {username}")
+                            self.audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)
             return False
-    

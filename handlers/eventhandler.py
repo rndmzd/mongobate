@@ -27,7 +27,6 @@ class EventHandler:
         vip_refresh_interval=300,
         admin_refresh_interval=300,
         action_refresh_interval=300,
-        audio_device=None,
         aws_key=None,
         aws_secret=None):
         from helpers.cbevents import CBEvents
@@ -81,12 +80,6 @@ class EventHandler:
         self.action_users = None
 
         if 'vip_audio' in self.cb_events.active_components:
-            # if not audio_device:
-            #     logger.error("VIP audio is enabled. Must provide audio device name for output.")
-            #     raise ValueError("audio_device must be provided when VIP audio is enabled.")
-            from chataudio import AudioPlayer
-            ##  TODO: AudioPlayer
-            self.audio_player = AudioPlayer(audio_device)
             self.vip_users = {}
             self.vip_refresh_interval = vip_refresh_interval
             self.load_vip_users()
@@ -167,7 +160,7 @@ class EventHandler:
                     "admin": self.admin_users,
                     "custom_actions": self.action_users
                 }
-                process_result = self.cb_events.process_event(event, privileged_users, self.audio_player)
+                process_result = self.cb_events.process_event(event, privileged_users)
                 logger.debug(f"process_result: {process_result}")
                 self.event_queue.task_done()
             except queue.Empty:

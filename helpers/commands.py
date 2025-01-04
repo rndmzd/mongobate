@@ -8,11 +8,13 @@ logger.setLevel(logging.DEBUG)
 
 
 class Commands:
-    def __init__(self):
+    def __init__(self, actions=None):
         from . import config
         
         self.commands_file = config.get('General', 'commands_file')
         self.commands = {}
+
+        self.actions = actions
 
     def refresh_commands(self):
         logger.debug("Refreshing commands.")
@@ -26,14 +28,20 @@ class Commands:
                 #raise exc
     
     def try_command(self, command):
-        logger.debug(f"command: {command}")
-        if not self.refresh_commands():
+        try:
+            logger.debug(f"command: {command}")
+            if not self.refresh_commands():
+                return False
+            if command['command'] not in self.commands:
+                logger.warning(f"Unrecognized command: {command['command']}.")
+                return False
+            # Process Commands
+            logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
+            if command['command'] == "WTFU":
+                trigger_result = self.actions.trigger_couch_buzzer(duration=self.commands[command['command']]['duration'])
+                logger.debug(f"trigger_result: {trigger_result}")
+            return True
+        except Exception as e:
+            logger.exception('Failed to process command.', exc_info=e)
             return False
-        if command['command'] not in self.commands:
-            logger.warning(f"Unrecognized command: {command['command']}.")
-            return False
-        # PROCESS COMMAND HERE
-        ## TODO: User management commands, WTFU command?
-        logger.debug(f"self.commands[command['command']]: {self.commands[command['command']]}")
-        return True
         

@@ -40,11 +40,8 @@ class CBEvents:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
         if 'couch_buzzer' in self.active_components:
             actions_args['couch_buzzer'] = True
-            self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
-            self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
-            self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
 
-        self.actions = Actions(actions_args)
+        self.actions = Actions(**actions_args)
         self.audio_player = AudioPlayer()
         self.commands = Commands(actions=self.actions)
 

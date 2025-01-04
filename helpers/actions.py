@@ -13,12 +13,14 @@ class Actions:
                  vip_audio: bool = False,
                  command_parser: bool = False,
                  custom_actions: bool = False,
-                 spray_bottle: bool = False):
+                 spray_bottle: bool = False,
+                 couch_buzzer: bool = False):
         self.chatdj_enabled = chatdj
         self.vip_audio_enabled = vip_audio
         self.command_parser_enabled = command_parser
         self.custom_actions_enabled = custom_actions
         self.spray_bottle_enabled = spray_bottle
+        self.couch_buzzer_enabled = couch_buzzer
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
@@ -37,6 +39,11 @@ class Actions:
 
         if self.custom_actions_enabled:
             self.custom_action_url = config.get("Custom Actions", "url")
+        
+        if self.couch_buzzer_enabled:
+            self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
+            self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
+            self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
@@ -175,7 +182,8 @@ class Actions:
             logger.exception(f"Error skipping song: {e}")
             return False
     
-    def trigger_spray(self, spray_bottle_url) -> bool:
+    ## TODO: Refactor to use a single function for post requests
+    def trigger_spray(self) -> bool:
         """Trigger the spray bottle action."""
         # if not self.spray_bottle_enabled:
         #    logger.warning("Spray bottle is not enabled.")
@@ -186,7 +194,7 @@ class Actions:
             data = {
                 "sprayAction": True
             }
-            response = requests.post(spray_bottle_url, data=data)
+            response = requests.post(self.spray_bottle_url, data=data)
             if response.status_code == 200:
                 logger.info("Success:", response.json())
                 return True
@@ -197,35 +205,23 @@ class Actions:
         except Exception as e:
             logger.exception(f"Error triggering spray bottle: {e}")
             return False
-
-    def send_post_request(self, url: str, data: Dict) -> bool:
+    
+    ## TODO: Refactor to use a single function for post requests
+    def trigger_couch_buzzer(self, duration=1) -> bool:
         """Send a post request to a specified URL."""
         try:
-            response = requests.post(url, json=data)
+            data = {
+                "duration": duration
+            }
+            response = requests.post(self.couch_buzzer_url, json=data, auth=(self.couch_buzzer_username, self.couch_buzzer_password))
             if response.status_code == 200:
-                logger.info("Post request successful:", response.json())
+                logger.info("Success:", response.json())
                 return True
             else:
-                logger.error("Post request failed with status code:", response.status_code)
+                logger.error("Request failed with status code:", response.status_code)
                 logger.error("Response:", response.text)
             return False
         except Exception as e:
-            logger.exception(f"Error sending post request: {e}")
+            logger.exception(f"Error triggering couch buzzer: {e}")
             return False
 
-    def trigger_custom_action(self, command: str) -> bool:
-        """Trigger a custom action based on a command."""
-        if not self.custom_actions_enabled:
-            logger.warning("Custom actions are not enabled.")
-            return False
-
-        logger.debug('Executing custom action.')
-        try:
-            if command == ""
-            data = {
-                "command": command
-            }
-            return self.send_post_request(self.custom_action_url, data)
-        except Exception as e:
-            logger.exception(f"Error triggering custom action: {e}")
-            return False

@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz
 import requests
+import base64
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
@@ -16,15 +17,23 @@ class Actions:
                  spray_bottle: bool = False,
                  couch_buzzer: bool = False):
         self.chatdj_enabled = chatdj
+        logger.debug(f"ChatDJ enabled: {self.chatdj_enabled}")
         self.vip_audio_enabled = vip_audio
+        logger.debug(f"VIP Audio enabled: {self.vip_audio_enabled}")
         self.command_parser_enabled = command_parser
+        logger.debug(f"Command Parser enabled: {self.command_parser_enabled}")
         self.custom_actions_enabled = custom_actions
+        logger.debug(f"Custom Actions enabled: {self.custom_actions_enabled}")
         self.spray_bottle_enabled = spray_bottle
+        logger.debug(f"Spray Bottle enabled: {self.spray_bottle_enabled}")
         self.couch_buzzer_enabled = couch_buzzer
+        logger.debug(f"Couch Buzzer enabled: {self.couch_buzzer_enabled}")
+
+        from . import config
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
-            from . import config, song_cache_collection
+            from . import song_cache_collection
 
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
@@ -36,14 +45,13 @@ class Actions:
         
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
-
-        if self.custom_actions_enabled:
-            self.custom_action_url = config.get("Custom Actions", "url")
+        logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
         
         if self.couch_buzzer_enabled:
             self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
             self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
             self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
+        logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
@@ -210,18 +218,24 @@ class Actions:
     def trigger_couch_buzzer(self, duration=1) -> bool:
         """Send a post request to a specified URL."""
         try:
+            credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
+            encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
             data = {
-                "duration": duration
+                "duration": duration,
+                "auth": encoded_credentials
             }
-            response = requests.post(self.couch_buzzer_url, json=data, auth=(self.couch_buzzer_username, self.couch_buzzer_password))
+            response = requests.post(self.couch_buzzer_url, data=data)
             if response.status_code == 200:
-                logger.info("Success:", response.json())
+                try:
+                    response_json = response.json()
+                    logger.info(f"Success: {response_json}")
+                except requests.exceptions.JSONDecodeError:
+                    logger.info("Success: Response is not in JSON format")
                 return True
             else:
-                logger.error("Request failed with status code:", response.status_code)
-                logger.error("Response:", response.text)
+                logger.error(f"Request failed with status code: {response.status_code}")
+                logger.error(f"Response: {response.text}")
             return False
         except Exception as e:
             logger.exception(f"Error triggering couch buzzer: {e}")
             return False
-

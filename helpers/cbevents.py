@@ -33,15 +33,20 @@ class CBEvents:
             self.vip_audio_directory = config.get("General", "vip_audio_directory")
         if 'command_parser' in self.active_components:
             actions_args['command_parser'] = True
-            self.commands = Commands()
         if 'custom_actions' in self.active_components:
             actions_args['custom_actions'] = True
         if 'spray_bottle' in self.active_components:
             actions_args['spray_bottle'] = True
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
+        if 'couch_buzzer' in self.active_components:
+            actions_args['couch_buzzer'] = True
+            self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
+            self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
+            self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
 
         self.actions = Actions(actions_args)
         self.audio_player = AudioPlayer()
+        self.commands = Commands(actions=self.actions)
 
     def process_event(self, event, privileged_users):
         try:
@@ -65,7 +70,7 @@ class CBEvents:
             elif event_method == "fanclubJoin":
                 process_result = self.fanclub_join(event_object)
             elif  event_method == "privateMessage":
-                process_result = self.private_message(event_object, action_users)
+                process_result = self.private_message(event_object, admin_users, action_users)
             elif event_method == "roomSubjectChange":
                 process_result = self.room_subject_change(event_object)
             elif event_method == "userEnter":
@@ -221,7 +226,7 @@ class CBEvents:
             logger.exception("Error processing fanclub join event", exc_info=e)
             return False
     
-    def private_message(self, event, action_users):
+    def private_message(self, event, admin_users, action_users):
         """
         {
             "message": {
@@ -246,6 +251,16 @@ class CBEvents:
         try:
             # Process private message event
             logger.info("Private message event received.")
+            
+            if 'command_parser' in self.active_components:
+                if event["user"]["username"] in admin_users:
+                    logger.info(f"Admin message: {event['message']['message']}")
+                    command = self.checks.get_command(event["message"]["message"])
+                    if command:
+                        logger.info("Trying command: {command}")
+                        command_result = self.commands.try_command(command)
+                        logger.debug(f"command_result: {command_result}")
+
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():
@@ -255,7 +270,12 @@ class CBEvents:
                     for action_message in action_messages.keys():
                         if action_message in message:
                             logger.info(f"Message matches action message for user {username}. Executing action.")
-                            self.actions.trigger_custom_action(action_messages[action_message])
+                            audio_file = action_messages[message]
+                            logger.debug(f"audio_file: {audio_file}")
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug(f"audio_file_path: {audio_file_path}")
+                            logger.info(f"Playing custom action audio for user: {username}")
+                            self.audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
             logger.exception("Error processing private message event", exc_info=e)

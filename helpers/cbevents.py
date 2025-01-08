@@ -148,9 +148,9 @@ class CBEvents:
                                 logger.info(f"Song added to queue: {song_info}")
             if 'spray_bottle' in self.active_components:
                 logger.info("Checking if spray bottle tip.")
-                if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
+                if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]) or event["tip"]["message"].strip().lower() == "spatula":
                     logger.info("Spray bottle tip detected.")
-                    spray_bottle_result = self.actions.trigger_spray(self.spray_bottle_url)
+                    spray_bottle_result = self.actions.trigger_spray()
                     logger.debug(f'spray_bottle_result: {spray_bottle_result}')
             return True
         except Exception as e:
@@ -457,6 +457,7 @@ class CBEvents:
                         logger.info("Trying command: {command}")
                         command_result = self.commands.try_command(command)
                         logger.debug(f"command_result: {command_result}")
+                        
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():

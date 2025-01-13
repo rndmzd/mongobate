@@ -48,13 +48,13 @@ class Actions:
         
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
-        logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
+            logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
         
         if self.couch_buzzer_enabled:
             self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
             self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
             self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
-        logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
+            logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
 
         if self.obs_integration_enabled:
             from handlers.obshandler import OBSHandler

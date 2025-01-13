@@ -261,28 +261,28 @@ class Actions:
 
     def set_scene(self, scene_name: str) -> bool:
         """Set the current OBS scene."""
-        if not self.obs_handler_enabled:
+        if not self.obs_integration_enabled:
             logger.warning("OBS Handler is not enabled.")
             return False
         return self.obs.set_scene_sync(scene_name)
 
     def get_current_scene(self) -> Optional[str]:
         """Get the current OBS scene name."""
-        if not self.obs_handler_enabled:
+        if not self.obs_integration_enabled:
             logger.warning("OBS Handler is not enabled.")
             return None
         return self.obs.get_current_scene_sync()
 
     def set_source_visibility(self, scene_name: str, source_name: str, visible: bool) -> bool:
         """Set the visibility of an OBS source."""
-        if not self.obs_handler_enabled:
+        if not self.obs_integration_enabled:
             logger.warning("OBS Handler is not enabled.")
             return False
         return self.obs.set_source_visibility_sync(scene_name, source_name, visible)
 
     def get_source_visibility(self, scene_name: str, source_name: str) -> Optional[bool]:
         """Get the visibility state of an OBS source."""
-        if not self.obs_handler_enabled:
+        if not self.obs_integration_enabled:
             logger.warning("OBS Handler is not enabled.")
             return None
         return self.obs.get_source_visibility_sync(scene_name, source_name)

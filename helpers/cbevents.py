@@ -39,8 +39,8 @@ class CBEvents:
             actions_args['spray_bottle'] = True
         if 'couch_buzzer' in self.active_components:
             actions_args['couch_buzzer'] = True
-        if 'obs_handler' in self.active_components:
-            actions_args['obs_handler'] = True
+        if 'obs_integration' in self.active_components:
+            actions_args['obs_integration'] = True
 
         self.actions = Actions(**actions_args)
         self.audio_player = AudioPlayer()

@@ -16,7 +16,7 @@ class Actions:
                  custom_actions: bool = False,
                  spray_bottle: bool = False,
                  couch_buzzer: bool = False,
-                 obs_handler: bool = False):
+                 obs_integration: bool = False):
         self.chatdj_enabled = chatdj
         logger.debug(f"ChatDJ enabled: {self.chatdj_enabled}")
         self.vip_audio_enabled = vip_audio
@@ -29,8 +29,8 @@ class Actions:
         logger.debug(f"Spray Bottle enabled: {self.spray_bottle_enabled}")
         self.couch_buzzer_enabled = couch_buzzer
         logger.debug(f"Couch Buzzer enabled: {self.couch_buzzer_enabled}")
-        self.obs_handler_enabled = obs_handler
-        logger.debug(f"OBS Handler enabled: {self.obs_handler_enabled}")
+        self.obs_integration_enabled = obs_integration
+        logger.debug(f"OBS Integration enabled: {self.obs_integration_enabled}")
 
         from . import config
 
@@ -56,7 +56,7 @@ class Actions:
             self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
         logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
 
-        if self.obs_handler_enabled:
+        if self.obs_integration_enabled:
             from handlers.obshandler import OBSHandler
             self.obs = OBSHandler(
                 host=config.get("OBS", "host"),
@@ -69,7 +69,7 @@ class Actions:
                 logger.error("Failed to connect to OBS")
 
     def __del__(self):
-        if hasattr(self, 'obs') and self.obs_handler_enabled:
+        if hasattr(self, 'obs') and self.obs_integration_enabled:
             self.obs.disconnect_sync()
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:

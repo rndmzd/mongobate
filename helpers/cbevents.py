@@ -178,7 +178,7 @@ class CBEvents:
             # Process broadcast start event
             logger.info("Broadcast start event received.")
             
-            if 'obs_handler' in self.active_components:
+            if 'obs_integration' in self.active_components:
                 # Switch to the main broadcast scene
                 self.actions.set_scene('main')
                 
@@ -205,7 +205,7 @@ class CBEvents:
             # Process broadcast stop event
             logger.info("Broadcast stop event received.")
             
-            if 'obs_handler' in self.active_components:
+            if 'obs_integration' in self.active_components:
                 # Switch to the offline scene
                 self.actions.set_scene('offline')
                 

@@ -37,9 +37,10 @@ class CBEvents:
             actions_args['custom_actions'] = True
         if 'spray_bottle' in self.active_components:
             actions_args['spray_bottle'] = True
-            self.spray_bottle_url = config.get("General", "spray_bottle_url")
         if 'couch_buzzer' in self.active_components:
             actions_args['couch_buzzer'] = True
+        if 'obs_handler' in self.active_components:
+            actions_args['obs_handler'] = True
 
         self.actions = Actions(**actions_args)
         self.audio_player = AudioPlayer()
@@ -114,7 +115,7 @@ class CBEvents:
         try:
             # Process tip event
             logger.info("Tip event received.")
-            
+                
             ## Chat Auto DJ ##
             if 'chat_auto_dj' in self.active_components:
                 ## Perform checks for tip event items ##
@@ -146,12 +147,14 @@ class CBEvents:
                                 logger.error(f"Failed to add song to queue: {song_info}")
                             else:
                                 logger.info(f"Song added to queue: {song_info}")
+
             if 'spray_bottle' in self.active_components:
                 logger.info("Checking if spray bottle tip.")
                 if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
                     logger.info("Spray bottle tip detected.")
-                    spray_bottle_result = self.actions.trigger_spray(self.spray_bottle_url)
+                    spray_bottle_result = self.actions.trigger_spray()
                     logger.debug(f'spray_bottle_result: {spray_bottle_result}')
+                        
             return True
         except Exception as e:
             logger.exception("Error processing tip event", exc_info=e)
@@ -174,6 +177,11 @@ class CBEvents:
         try:
             # Process broadcast start event
             logger.info("Broadcast start event received.")
+            
+            if 'obs_handler' in self.active_components:
+                # Switch to the main broadcast scene
+                self.actions.set_scene('main')
+                
             return True
         except Exception as e:
             logger.exception("Error processing broadcast start event", exc_info=e)
@@ -196,6 +204,11 @@ class CBEvents:
         try:
             # Process broadcast stop event
             logger.info("Broadcast stop event received.")
+            
+            if 'obs_handler' in self.active_components:
+                # Switch to the offline scene
+                self.actions.set_scene('offline')
+                
             return True
         except Exception as e:
             logger.exception("Error processing broadcast stop event", exc_info=e)
@@ -326,6 +339,7 @@ class CBEvents:
                         self.audio_player.play_audio(audio_file_path)
                         logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
                         self.vip_cooldown[username] = current_time
+                            
             return True
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)

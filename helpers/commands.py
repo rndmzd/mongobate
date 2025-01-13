@@ -40,6 +40,9 @@ class Commands:
             if command['command'] == "WTFU":
                 trigger_result = self.actions.trigger_couch_buzzer(duration=self.commands[command['command']]['duration'])
                 logger.debug(f"trigger_result: {trigger_result}")
+            elif command['command'] == "BRB":
+                scene_result = self.actions.set_scene('brb')
+                logger.debug(f"scene_result: {scene_result}")
             return True
         except Exception as e:
             logger.exception('Failed to process command.', exc_info=e)

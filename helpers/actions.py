@@ -15,7 +15,8 @@ class Actions:
                  command_parser: bool = False,
                  custom_actions: bool = False,
                  spray_bottle: bool = False,
-                 couch_buzzer: bool = False):
+                 couch_buzzer: bool = False,
+                 obs_integration: bool = False):
         self.chatdj_enabled = chatdj
         logger.debug(f"ChatDJ enabled: {self.chatdj_enabled}")
         self.vip_audio_enabled = vip_audio
@@ -28,6 +29,8 @@ class Actions:
         logger.debug(f"Spray Bottle enabled: {self.spray_bottle_enabled}")
         self.couch_buzzer_enabled = couch_buzzer
         logger.debug(f"Couch Buzzer enabled: {self.couch_buzzer_enabled}")
+        self.obs_integration_enabled = obs_integration
+        logger.debug(f"OBS Integration enabled: {self.obs_integration_enabled}")
 
         from . import config
 
@@ -45,13 +48,29 @@ class Actions:
         
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
-        logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
+            logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
         
         if self.couch_buzzer_enabled:
             self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
             self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
             self.couch_buzzer_password = config.get("General", "couch_buzzer_password")
-        logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
+            logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
+
+        if self.obs_integration_enabled:
+            from handlers.obshandler import OBSHandler
+            self.obs = OBSHandler(
+                host=config.get("OBS", "host"),
+                port=config.getint("OBS", "port"),
+                password=config.get("OBS", "password")
+            )
+            if self.obs.connect_sync():
+                logger.info("Successfully connected to OBS")
+            else:
+                logger.error("Failed to connect to OBS")
+
+    def __del__(self):
+        if hasattr(self, 'obs') and self.obs_integration_enabled:
+            self.obs.disconnect_sync()
 
     def get_cached_song(self, song_info: Dict[str, str]) -> Optional[Dict]:
         """Retrieve a cached song from MongoDB."""
@@ -239,3 +258,31 @@ class Actions:
         except Exception as e:
             logger.exception(f"Error triggering couch buzzer: {e}")
             return False
+
+    def set_scene(self, scene_name: str) -> bool:
+        """Set the current OBS scene."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS Handler is not enabled.")
+            return False
+        return self.obs.set_scene_sync(scene_name)
+
+    def get_current_scene(self) -> Optional[str]:
+        """Get the current OBS scene name."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS Handler is not enabled.")
+            return None
+        return self.obs.get_current_scene_sync()
+
+    def set_source_visibility(self, scene_name: str, source_name: str, visible: bool) -> bool:
+        """Set the visibility of an OBS source."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS Handler is not enabled.")
+            return False
+        return self.obs.set_source_visibility_sync(scene_name, source_name, visible)
+
+    def get_source_visibility(self, scene_name: str, source_name: str) -> Optional[bool]:
+        """Get the visibility state of an OBS source."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS Handler is not enabled.")
+            return None
+        return self.obs.get_source_visibility_sync(scene_name, source_name)

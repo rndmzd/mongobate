@@ -93,33 +93,61 @@ class OBSHandler:
             self._connected = False
             logger.info("Disconnected from OBS WebSocket")
 
-    async def send_request(self, request_type: str, request_data: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
-        """Send a request to OBS WebSocket server.
+    async def _try_reconnect(self) -> bool:
+        """Attempt to reconnect to OBS WebSocket server."""
+        logger.info("Attempting to reconnect to OBS WebSocket...")
+        return await self.connect()
+
+    async def send_request(self, request_type: str, request_data: Optional[Dict] = None, max_retries: int = 2) -> Optional[Dict[str, Any]]:
+        """Send a request to OBS WebSocket server with retry logic.
         
         Args:
             request_type: Type of request to send
             request_data: Data to send with request
+            max_retries: Maximum number of retry attempts (default: 2)
             
         Returns:
             Response from OBS WebSocket server or None if request failed
         """
-        if not self.ws or not self._connected:
-            logger.error("Not connected to OBS WebSocket")
-            return None
+        retries = 0
+        
+        while retries <= max_retries:
+            if not self.ws or not self._connected:
+                if retries < max_retries:
+                    if await self._try_reconnect():
+                        logger.info("Reconnected successfully")
+                    else:
+                        logger.error("Reconnection failed")
+                        retries += 1
+                        await asyncio.sleep(1)  # Wait before retry
+                        continue
+                else:
+                    logger.error("Not connected to OBS WebSocket and max retries exceeded")
+                    return None
             
-        try:
-            request = simpleobsws.Request(request_type, request_data)
-            response = await self.ws.call(request)
-            
-            if response.ok():
-                return response.responseData
-            else:
-                logger.error(f"Request failed: {response.error()}")
-                return None
+            try:
+                request = simpleobsws.Request(request_type, request_data)
+                response = await self.ws.call(request)
                 
-        except Exception as e:
-            logger.exception(f"Error sending request {request_type}", exc_info=e)
-            return None
+                if response and response.ok():
+                    return response.responseData
+                else:
+                    logger.error(f"Request failed for {request_type}")
+                    if retries < max_retries:
+                        retries += 1
+                        await asyncio.sleep(1)  # Wait before retry
+                        continue
+                    return None
+                    
+            except Exception as e:
+                logger.exception(f"Error sending request {request_type}", exc_info=e)
+                if retries < max_retries:
+                    retries += 1
+                    await asyncio.sleep(1)  # Wait before retry
+                    continue
+                return None
+        
+        return None
 
     # Convenience methods for common OBS operations
     async def set_scene(self, scene_key: str) -> bool:

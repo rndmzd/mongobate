@@ -146,4 +146,13 @@ plt.figure(figsize=(20, 10), facecolor='black')
 plt.imshow(wordcloud, interpolation='bilinear')
 plt.axis('off')
 plt.title(f"{QUERY_USER}'s Most Used Gifs", fontsize=28, color='#00ffff', pad=20, usetex=False, y=1.02)
+
+# Save the plot with high DPI for quality
+plt.savefig(f'{QUERY_USER}_wordcloud.png', 
+            dpi=300, 
+            bbox_inches='tight', 
+            facecolor='black',
+            edgecolor='none',
+            pad_inches=0.5)
+
 plt.show()

@@ -9,3 +9,4 @@ commands.yaml
 **.env
 chatdj/server/
 .env
+**_wordcloud.png

@@ -8,7 +8,24 @@ import base64
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
-class Actions:
+# Create a base HTTP request handler class to handle common request functionality
+class HTTPRequestHandler:
+    def make_request(self, url: str, data: dict, auth: tuple = None) -> bool:
+        """Make a POST request with error handling and logging."""
+        try:
+            response = requests.post(url, data=data, auth=auth)
+            if response.status_code == 200:
+                logger.info(f"Success: {response.json() if response.text else 'No response body'}")
+                return True
+            else:
+                logger.error(f"Request failed with status code: {response.status_code}")
+                logger.error(f"Response: {response.text}")
+            return False
+        except Exception as e:
+            logger.exception(f"Error making HTTP request: {e}")
+            return False
+
+class Actions(HTTPRequestHandler):
     def __init__(self,
                  chatdj: bool = False,
                  vip_audio: bool = False,
@@ -209,55 +226,19 @@ class Actions:
             logger.exception(f"Error skipping song: {e}")
             return False
     
-    ## TODO: Refactor to use a single function for post requests
     def trigger_spray(self) -> bool:
         """Trigger the spray bottle action."""
-        # if not self.spray_bottle_enabled:
-        #    logger.warning("Spray bottle is not enabled.")
-        #    return False
-
         logger.debug('Executing spray bottle action.')
-        try:
-            data = {
-                "sprayAction": True
-            }
-            response = requests.post(self.spray_bottle_url, data=data)
-            if response.status_code == 200:
-                logger.info("Success:", response.json())
-                return True
-            else:
-                logger.error("Request failed with status code:", response.status_code)
-                logger.error("Response:", response.text)
-            return False
-        except Exception as e:
-            logger.exception(f"Error triggering spray bottle: {e}")
-            return False
+        return self.make_request(self.spray_bottle_url, {"sprayAction": True})
     
-    ## TODO: Refactor to use a single function for post requests
     def trigger_couch_buzzer(self, duration=1) -> bool:
-        """Send a post request to a specified URL."""
-        try:
-            credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
-            encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-            data = {
-                "duration": duration,
-                "auth": encoded_credentials
-            }
-            response = requests.post(self.couch_buzzer_url, data=data)
-            if response.status_code == 200:
-                try:
-                    response_json = response.json()
-                    logger.info(f"Success: {response_json}")
-                except requests.exceptions.JSONDecodeError:
-                    logger.info("Success: Response is not in JSON format")
-                return True
-            else:
-                logger.error(f"Request failed with status code: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-            return False
-        except Exception as e:
-            logger.exception(f"Error triggering couch buzzer: {e}")
-            return False
+        """Trigger the couch buzzer action."""
+        credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
+        encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
+        return self.make_request(
+            self.couch_buzzer_url,
+            {"duration": duration, "auth": encoded_credentials}
+        )
 
     def set_scene(self, scene_name: str) -> bool:
         """Set the current OBS scene."""

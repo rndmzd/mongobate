@@ -480,7 +480,7 @@ class CBEvents:
                     for action_message in action_messages.keys():
                         if action_message in message:
                             logger.info(f"Message matches action message for user {username}. Executing action.")
-                            audio_file = action_messages[message]
+                            audio_file = action_messages[action_message]
                             logger.debug(f"audio_file: {audio_file}")
                             audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
                             logger.debug(f"audio_file_path: {audio_file_path}")

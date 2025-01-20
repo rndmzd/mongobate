@@ -41,6 +41,9 @@ class CBEvents:
             actions_args['couch_buzzer'] = True
         if 'obs_integration' in self.active_components:
             actions_args['obs_integration'] = True
+        if 'event_audio' in self.active_components:
+            actions_args['event_audio'] = True
+            self.fanclub_join_audio_path = config.get("EventAudio", "fanclub_join")
 
         self.actions = Actions(**actions_args)
         self.audio_player = AudioPlayer()
@@ -231,6 +234,8 @@ class CBEvents:
         try:
             # Process fanclub join event
             logger.info("Fanclub join event received.")
+            if 'event_audio' in self.active_components:
+                self.audio_player.play_audio(self.fanclub_join_audio_path)
             return True
         except Exception as e:
             logger.exception("Error processing fanclub join event", exc_info=e)

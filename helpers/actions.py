@@ -84,6 +84,9 @@ class Actions(HTTPRequestHandler):
                 logger.info("Successfully connected to OBS")
             else:
                 logger.error("Failed to connect to OBS")
+            
+            if self.chatdj_enabled:
+                self.request_overlay_duration = config.getint("General", "request_overlay_duration")
 
     def __del__(self):
         if hasattr(self, 'obs') and self.obs_integration_enabled:
@@ -200,15 +203,18 @@ class Actions(HTTPRequestHandler):
             logger.exception(f"Error checking market availability: {e}")
             return False
 
-    def add_song_to_queue(self, uri: str) -> bool:
-        """Add a song to the playback queue."""
+    def add_song_to_queue(self, uri: str, requester_name: str, song_details: str) -> bool:
+        """Add a song to the playback queue and trigger the song requester overlay."""
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
             return False
 
         logger.debug('Executing add song to queue action.')
         try:
-            return self.auto_dj.add_song_to_queue(uri)
+            if self.auto_dj.add_song_to_queue(uri):
+                self.trigger_song_requester_overlay(requester_name, song_details, self.request_overlay_duration if self.request_overlay_duration else 10)
+                return True
+            return False
         except Exception as e:
             logger.exception(f"Error adding song to queue: {e}")
             return False
@@ -267,3 +273,10 @@ class Actions(HTTPRequestHandler):
             logger.warning("OBS Handler is not enabled.")
             return None
         return self.obs.get_source_visibility_sync(scene_name, source_name)
+
+    def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
+        """Trigger the song requester overlay to show and then hide after a duration."""
+        if not self.obs_integration_enabled:
+            logger.warning("OBS Handler is not enabled.")
+            return
+        self.obs.trigger_song_requester_overlay_sync(requester_name, song_details, display_duration)

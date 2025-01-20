@@ -144,7 +144,8 @@ class CBEvents:
                             if not self.actions.available_in_market(song_uri):
                                 logger.warning(f"Song not available in user market: {song_info}")
                                 continue
-                            add_queue_result = self.actions.add_song_to_queue(song_uri)
+                            song_details = f"{song_info['artist']} - {song_info['song']}"
+                            add_queue_result = self.actions.add_song_to_queue(song_uri, event["user"]["username"], song_details)
                             logger.debug(f'add_queue_result: {add_queue_result}')
                             if not add_queue_result:
                                 logger.error(f"Failed to add song to queue: {song_info}")

@@ -221,6 +221,46 @@ class OBSHandler:
             return response.get('sceneItemEnabled')
         return None
 
+    async def show_song_requester(self, requester_name: str, song_details: str) -> bool:
+        """Show the song requester name and song details on the overlay.
+        
+        Args:
+            requester_name: Name of the user who requested the song
+            song_details: Details of the requested song (artist and name)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        response = await self.send_request('SetTextGDIPlusProperties', {
+            'source': 'SongRequester',
+            'text': f'Requested by: {requester_name}\nSong: {song_details}'
+        })
+        return response is not None
+
+    async def hide_song_requester(self) -> bool:
+        """Hide the song requester name and song details from the overlay.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        response = await self.send_request('SetTextGDIPlusProperties', {
+            'source': 'SongRequester',
+            'text': ''
+        })
+        return response is not None
+
+    async def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
+        """Trigger the song requester overlay to show and then hide after a duration.
+        
+        Args:
+            requester_name: Name of the user who requested the song
+            song_details: Details of the requested song (artist and name)
+            display_duration: Duration to display the requester name and song details (in seconds)
+        """
+        if await self.show_song_requester(requester_name, song_details):
+            await asyncio.sleep(display_duration)
+            await self.hide_song_requester()
+
     def run_sync(self, coro):
         """Run a coroutine synchronously.
         
@@ -254,4 +294,8 @@ class OBSHandler:
 
     def get_source_visibility_sync(self, scene_key: str, source_name: str) -> Optional[bool]:
         """Synchronous version of get_source_visibility()."""
-        return self.run_sync(self.get_source_visibility(scene_key, source_name)) 
+        return self.run_sync(self.get_source_visibility(scene_key, source_name))
+
+    def trigger_song_requester_overlay_sync(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
+        """Synchronous version of trigger_song_requester_overlay()."""
+        self.run_sync(self.trigger_song_requester_overlay(requester_name, song_details, display_duration))

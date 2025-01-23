@@ -112,20 +112,20 @@ class OBSHandler:
         retries = 0
         
         while retries <= max_retries:
-            if not self.ws or not self._connected:
-                if retries < max_retries:
-                    if await self._try_reconnect():
-                        logger.info("Reconnected successfully")
-                    else:
-                        logger.error("Reconnection failed")
-                        retries += 1
-                        await asyncio.sleep(1)  # Wait before retry
-                        continue
-                else:
-                    logger.error("Not connected to OBS WebSocket and max retries exceeded")
-                    return None
-            
             try:
+                if not self.ws or not self._connected:
+                    if retries < max_retries:
+                        if await self._try_reconnect():
+                            logger.info("Reconnected successfully")
+                        else:
+                            logger.error("Reconnection failed")
+                            retries += 1
+                            await asyncio.sleep(1)  # Wait before retry
+                            continue
+                    else:
+                        logger.error("Not connected to OBS WebSocket and max retries exceeded")
+                        return None
+                
                 request = simpleobsws.Request(request_type, request_data)
                 response = await self.ws.call(request)
                 
@@ -139,6 +139,20 @@ class OBSHandler:
                         continue
                     return None
                     
+            except simpleobsws.NotIdentifiedError:
+                logger.warning("Lost connection to OBS Websocket, attempting to reconnect...")
+                self._connected = False
+                if retries < max_retries:
+                    if await self._try_reconnect():
+                        logger.info("Reconnected successfully")
+                        retries += 1
+                        continue
+                    else:
+                        logger.error("Reconnection failed")
+                        retries += 1
+                        await asyncio.sleep(1)  # Wait before retry
+                        continue
+                return None
             except Exception as e:
                 logger.exception(f"Error sending request {request_type}", exc_info=e)
                 if retries < max_retries:
@@ -192,12 +206,30 @@ class OBSHandler:
         if not scene_name:
             return False
             
+        # First get the scene item ID
+        id_response = await self.send_request('GetSceneItemId', {
+            'sceneName': scene_name,
+            'sourceName': source_name
+        })
+        
+        if not id_response:
+            logger.error(f"Failed to get scene item ID for {source_name}")
+            return False
+            
+        scene_item_id = id_response.get('sceneItemId')
+        if scene_item_id is None:
+            logger.error(f"Scene item ID not found for {source_name}")
+            return False
+            
+        # Then set the visibility using the ID
         response = await self.send_request('SetSceneItemEnabled', {
             'sceneName': scene_name,
-            'sceneItemName': source_name,
+            'sceneItemId': scene_item_id,
             'sceneItemEnabled': visible
         })
-        return response is not None
+        logger.debug(f"Set scene item visibility response: {response}")
+        # return response is not None
+        return True
 
     async def get_source_visibility(self, scene_key: str, source_name: str) -> Optional[bool]:
         """Get the visibility state of a source in a scene.
@@ -213,9 +245,24 @@ class OBSHandler:
         if not scene_name:
             return None
             
+        # First get the scene item ID
+        id_response = await self.send_request('GetSceneItemId', {
+            'sceneName': scene_name,
+            'sourceName': source_name
+        })
+        
+        if not id_response:
+            logger.error(f"Failed to get scene item ID for {source_name}")
+            return None
+            
+        scene_item_id = id_response.get('sceneItemId')
+        if scene_item_id is None:
+            logger.error(f"Scene item ID not found for {source_name}")
+            return None
+            
         response = await self.send_request('GetSceneItemEnabled', {
             'sceneName': scene_name,
-            'sceneItemName': source_name
+            'sceneItemId': scene_item_id
         })
         if response:
             return response.get('sceneItemEnabled')
@@ -231,11 +278,20 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
-        response = await self.send_request('SetTextGDIPlusProperties', {
-            'source': 'SongRequester',
-            'text': f'Requested by: {requester_name}\nSong: {song_details}'
+        logger.debug("Setting song requester text...")
+        # First set the text
+        await self.send_request('SetInputSettings', {
+            'inputName': 'SongRequester',
+            'inputSettings': {
+                'text': f'Song requested by {requester_name}\n{song_details}'
+            }
         })
-        return response is not None
+            
+        # Then make the source visible
+        logger.debug("Making song requester source visible...")
+        visibility_result = await self.set_source_visibility('main', 'SongRequester', True)
+        logger.debug(f"Source visibility result: {visibility_result}")
+        return visibility_result
 
     async def hide_song_requester(self) -> bool:
         """Hide the song requester name and song details from the overlay.
@@ -243,11 +299,20 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
-        response = await self.send_request('SetTextGDIPlusProperties', {
-            'source': 'SongRequester',
-            'text': ''
+        logger.debug("Clearing song requester text...")
+        # First clear the text
+        await self.send_request('SetInputSettings', {
+            'inputName': 'SongRequester',
+            'inputSettings': {
+                'text': ''
+            }
         })
-        return response is not None
+            
+        # Then hide the source
+        logger.debug("Hiding song requester source...")
+        visibility_result = await self.set_source_visibility('main', 'SongRequester', False)
+        logger.debug(f"Source visibility result: {visibility_result}")
+        return visibility_result
 
     async def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
         """Trigger the song requester overlay to show and then hide after a duration.

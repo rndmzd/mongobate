@@ -278,8 +278,8 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
-        logger.debug("Setting song requester text...")
         # First set the text
+        logger.debug("Setting song requester text...")
         await self.send_request('SetInputSettings', {
             'inputName': 'SongRequester',
             'inputSettings': {
@@ -291,6 +291,7 @@ class OBSHandler:
         logger.debug("Making song requester source visible...")
         visibility_result = await self.set_source_visibility('main', 'SongRequester', True)
         logger.debug(f"Source visibility result: {visibility_result}")
+
         return visibility_result
 
     async def hide_song_requester(self) -> bool:
@@ -299,19 +300,22 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
+        # First hide the source
+        logger.debug("Hiding song requester source...")
+        visibility_result = await self.set_source_visibility('main', 'SongRequester', False)
+        logger.debug(f"Source visibility result: {visibility_result}")
+
+        await asyncio.sleep(1)
+
+        # Then clear the text
         logger.debug("Clearing song requester text...")
-        # First clear the text
         await self.send_request('SetInputSettings', {
             'inputName': 'SongRequester',
             'inputSettings': {
                 'text': ''
             }
         })
-            
-        # Then hide the source
-        logger.debug("Hiding song requester source...")
-        visibility_result = await self.set_source_visibility('main', 'SongRequester', False)
-        logger.debug(f"Source visibility result: {visibility_result}")
+        
         return visibility_result
 
     async def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:

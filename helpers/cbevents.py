@@ -1,6 +1,9 @@
 import logging
 from chataudio.audioplayer import AudioPlayer
-from . import Actions, Checks, Commands, config
+from .config import config
+from .actions import Actions
+from .checks import Checks
+from .commands import Commands
 
 logger = logging.getLogger('mongobate.helpers.cbevents')
 

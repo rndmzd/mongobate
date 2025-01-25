@@ -1,30 +1,23 @@
-import configparser
+"""Helpers package initialization."""
 import logging
-import os
-from pathlib import Path
-from pymongo import MongoClient
 
-from helpers.actions import Actions
-from helpers.checks import Checks
-from helpers.cbevents import CBEvents
-from helpers.commands import Commands
-
-logger = logging.getLogger('mongobate.chatdj')
+logger = logging.getLogger('mongobate.helpers')
 logger.setLevel(logging.DEBUG)
 
-config_path = Path(__file__).parent.parent / 'config.ini'
+# Import config first since other modules depend on it
+from .config import config, song_cache_collection
 
-config = configparser.ConfigParser()
-config.read(config_path)
+# Then import the classes that use the config
+from .commands import Commands
+from .checks import Checks
+from .actions import Actions
+from .cbevents import CBEvents
 
-logger.debug('Creating MongoDB client.')
-mongo_config = config['MongoDB']
-mongo_client = MongoClient(
-    host=os.getenv('MONGO_HOST', mongo_config.get('host', 'localhost')),
-    port=int(os.getenv('MONGO_PORT', mongo_config.getint('port', 27017))),
-    username=os.getenv('MONGO_USERNAME', mongo_config.get('username')),
-    password=os.getenv('MONGO_PASSWORD', mongo_config.get('password')),
-    directConnection=True)
-mongo_db = mongo_client[os.getenv('MONGO_DATABASE', mongo_config.get('db'))]
-
-song_cache_collection = mongo_db['song_cache_collection']
+__all__ = [
+    'Actions',
+    'Checks',
+    'CBEvents',
+    'Commands',
+    'config',
+    'song_cache_collection'
+]

@@ -78,12 +78,12 @@ class EventHandler:
             self.mongo_db = self.mongo_client[mongo_db]
             self.event_collection = self.mongo_db[mongo_collection]
 
+            # Initialize user collection if needed for VIP audio or command parser
+            self.user_collection = None
             if "vip_audio" in self.cb_events.active_components or "command_parser" in self.cb_events.active_components:
-                self.user_collection = (
-                    self.mongo_db[user_collection] if user_collection else None
-                )
-            else:
-                self.user_collection = None
+                if user_collection is not None:
+                    self.user_collection = self.mongo_db[user_collection]
+
         except ConnectionFailure as error:
             logger.exception(f"Could not connect to MongoDB: {error}")
             raise
@@ -92,17 +92,17 @@ class EventHandler:
         self.admin_users = None
         self.action_users = None
 
-        if 'vip_audio' in self.cb_events.active_components:
+        if 'vip_audio' in self.cb_events.active_components and self.user_collection is not None:
             self.vip_users = {}
             self.vip_refresh_interval = kwargs.get('vip_refresh_interval', 300)
             self.load_vip_users()
         
-        if 'command_parser' in self.cb_events.active_components:
+        if 'command_parser' in self.cb_events.active_components and self.user_collection is not None:
             self.admin_users = {}
             self.admin_refresh_interval = kwargs.get('admin_refresh_interval', 300)
             self.load_admin_users()
         
-        if 'custom_actions' in self.cb_events.active_components:
+        if 'custom_actions' in self.cb_events.active_components and self.user_collection is not None:
             self.action_users = {}
             self.action_refresh_interval = kwargs.get('action_refresh_interval', 300)
             self.load_action_users()
@@ -190,19 +190,27 @@ class EventHandler:
         Watch for changes in the MongoDB collection.
         """
         try:
+            # Set up the change stream with a resume token
             with self.event_collection.watch() as stream:
-                for change in stream:
-                    logger.debug(f"Change detected: {change}")
-                    self.event_queue.put(change)
+                while not self._stop_event.is_set():
+                    # Use a timeout to periodically check for stop signal
+                    try:
+                        change = next(stream, None)
+                        if change:
+                            logger.debug(f"Change detected: {change}")
+                            self.event_queue.put(change)
+                    except StopIteration:
+                        continue
         except Exception as error:
-            logger.exception("Error watching changes", exc_info=error)
+            if not self._stop_event.is_set():  # Only log if not shutting down
+                logger.exception("Error watching changes", exc_info=error)
 
     def update_user_list(self):
         """
         Update the list of users from MongoDB.
         """
         try:
-            if not self.user_collection:
+            if self.user_collection is None:
                 logger.warning("No user collection available")
                 return False
 
@@ -243,46 +251,64 @@ class EventHandler:
             time.sleep(60)  # Update every minute
 
     def run(self):
-        logger.info("Starting change stream watcher thread...")
+        """Start all monitoring threads."""
+        logger.info("Starting event handler threads...")
+        
+        # Start the change stream watcher thread
         self.watcher_thread = threading.Thread(
-            target=self.watch_changes, args=(), daemon=True
+            target=self.watch_changes,
+            name="watch_changes",
+            daemon=True
         )
         self.watcher_thread.start()
 
-        logger.info("Starting event processing thread...")
-        self.event_thread = threading.Thread(
-            target=self.event_processor, args=(), daemon=True
+        # Start the event processor thread
+        self.processor_thread = threading.Thread(
+            target=self.event_processor,
+            name="event_processor",
+            daemon=True
         )
-        self.event_thread.start()
+        self.processor_thread.start()
 
-        logger.info("Starting privileged user refresh thread...")
-        self.privileged_user_refresh_thread = threading.Thread(
-            target=self.privileged_user_refresh, args=(), daemon=True
-        )
-
-        if "chat_auto_dj" in self.cb_events.active_components:
-            logger.info("Starting song queue check thread...")
-            self.song_queue_check_thread = threading.Thread(
-                target=self.song_queue_check, args=(), daemon=True
+        # Start the user list monitor thread if needed
+        if self.user_collection is not None:
+            self.monitor_thread = threading.Thread(
+                target=self.user_list_monitor,
+                name="user_list_monitor",
+                daemon=True
             )
-            self.song_queue_check_thread.start()
+            self.monitor_thread.start()
 
     def stop(self):
+        """Stop all monitoring threads and cleanup resources."""
         logger.debug("Setting stop event.")
         self._stop_event.set()
-        for thread in [self.watcher_thread, self.event_thread, self.privileged_user_refresh_thread]:
-            if thread.is_alive():
-                logger.debug(f"Joining {thread.name} thread.")
-                thread.join()
-        logger.debug("Checking if MongoDB connection still active.")
-        self.cleanup()
 
-    def cleanup(self):
-        if self.mongo_client:
-            logger.info("Closing MongoDB connection...")
+        # Wait for threads to finish with a timeout
+        if hasattr(self, 'watcher_thread'):
+            logger.debug(f"Joining {self.watcher_thread.name} thread.")
+            self.watcher_thread.join(timeout=5)
+            if self.watcher_thread.is_alive():
+                logger.warning(f"{self.watcher_thread.name} thread did not stop gracefully.")
+
+        if hasattr(self, 'processor_thread'):
+            logger.debug(f"Joining {self.processor_thread.name} thread.")
+            self.processor_thread.join(timeout=5)
+            if self.processor_thread.is_alive():
+                logger.warning(f"{self.processor_thread.name} thread did not stop gracefully.")
+
+        if hasattr(self, 'monitor_thread'):
+            logger.debug(f"Joining {self.monitor_thread.name} thread.")
+            self.monitor_thread.join(timeout=5)
+            if self.monitor_thread.is_alive():
+                logger.warning(f"{self.monitor_thread.name} thread did not stop gracefully.")
+
+        # Close MongoDB connection
+        if hasattr(self, 'mongo_client'):
+            logger.debug("Closing MongoDB connection.")
             self.mongo_client.close()
 
-        logger.info("Clean-up complete.")
+        logger.info("Event handler stopped.")
 
 if __name__ == "__main__":
     import configparser

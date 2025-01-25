@@ -6,7 +6,7 @@ from rapidfuzz import fuzz
 import requests
 from chatdj import SongExtractor, AutoDJ
 from handlers.obshandler import OBSHandler
-from . import config, song_cache_collection
+from .config import config, song_cache_collection
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)

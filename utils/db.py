@@ -1,27 +1,27 @@
 # Create a database connection manager
 from pymongo import MongoClient
 import urllib.parse
+from utils.config import ConfigManager
 
 class DatabaseManager:
     _instance = None
+    _config = None
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._config = ConfigManager()
             cls._instance._init_connection()
         return cls._instance
     
     def _init_connection(self):
-        from utils.config import ConfigManager
-        config = ConfigManager()
-        
         # Build connection URI
-        if aws_key := config.get('MongoDB', 'aws_key'):
-            self.client = self._get_aws_connection(config)
+        if aws_key := self._config.get('MongoDB', 'aws_key'):
+            self.client = self._get_aws_connection(self._config)
         else:
-            self.client = self._get_standard_connection(config)
+            self.client = self._get_standard_connection(self._config)
             
-        self.db = self.client[config.get('MongoDB', 'db')]
+        self.db = self.client[self._config.get('MongoDB', 'db')]
         
     def _get_aws_connection(self, config):
         aws_key = urllib.parse.quote_plus(config.get('MongoDB', 'aws_key'))

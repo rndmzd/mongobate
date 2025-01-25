@@ -1,3 +1,5 @@
+"""Combined application and database module for event handling and MongoDB operations."""
+
 import configparser
 import logging
 from logging.handlers import RotatingFileHandler
@@ -5,7 +7,7 @@ import os
 import sys
 import time
 
-from multiprocessing import Event, Process
+from multiprocessing import Process
 
 from handlers import DBHandler, EventHandler
 
@@ -53,27 +55,47 @@ if __name__ == '__main__':
     mongo_db = config.get("MongoDB", "db")
     mongo_collection = config.get("MongoDB", "collection")
 
-    logger.debug('Initializing database handler.')
-    db_handler = DBHandler(
-        mongo_username, mongo_password, mongo_host, mongo_port, mongo_db, mongo_collection,
-        events_api_url=events_api_url,
-        requests_per_minute=requests_per_minute)
-    
+    aws_key = (
+        config.get("MongoDB", "aws_key")
+        if len(config.get("MongoDB", "aws_key")) > 0
+        else None
+    )
+    aws_secret = (
+        config.get("MongoDB", "aws_secret")
+        if len(config.get("MongoDB", "aws_secret")) > 0
+        else None
+    )
+
     logger.debug('Initializing event handler.')
     event_handler = EventHandler(
+        mongo_username=mongo_username,
+        mongo_password=mongo_password,
+        mongo_host=mongo_host,
+        mongo_port=mongo_port,
+        mongo_db=mongo_db,
+        aws_key=aws_key,
+        aws_secret=aws_secret
+    )
+
+    logger.debug('Initializing DB handler.')
+    db_handler = DBHandler(
         mongo_username,
         mongo_password,
-        mongo_host,
         mongo_port,
         mongo_db,
-        mongo_collection)
+        mongo_host,
+        aws_key,
+        aws_secret
+    )
 
-    logger.debug('Spawning process for database handler.')
-    db_process = Process(target=db_handler.run, args=())
+    event_process = Process(target=event_handler.run)
+    db_process = Process(target=db_handler.run)
+
+    event_process.start()
     db_process.start()
 
-    logger.debug('Calling event handler start.')
-    event_handler.run()
+    event_process.join()
+    db_process.join()
 
     try:
         while True:

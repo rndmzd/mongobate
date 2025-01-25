@@ -1,19 +1,22 @@
 import logging
 from typing import Dict, List, Optional
+import base64
 
 from rapidfuzz import fuzz
 import requests
-import base64
+from chatdj import SongExtractor, AutoDJ
+from handlers.obshandler import OBSHandler
+from . import config, song_cache_collection
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
 
 # Create a base HTTP request handler class to handle common request functionality
 class HTTPRequestHandler:
-    def make_request(self, url: str, data: dict, auth: tuple = None) -> bool:
+    def make_request(self, url: str, data: dict, auth: tuple = None, timeout: int = 30) -> bool:
         """Make a POST request with error handling and logging."""
         try:
-            response = requests.post(url, data=data, auth=auth)
+            response = requests.post(url, data=data, auth=auth, timeout=timeout)
             if response.status_code == 200:
                 logger.info(f"Success: {response.json() if response.text else 'No response body'}")
                 return True
@@ -21,40 +24,43 @@ class HTTPRequestHandler:
                 logger.error(f"Request failed with status code: {response.status_code}")
                 logger.error(f"Response: {response.text}")
             return False
-        except Exception as e:
-            logger.exception(f"Error making HTTP request: {e}")
+        except requests.Timeout:
+            logger.error(f"Request to {url} timed out after {timeout} seconds")
+            return False
+        except Exception as error:
+            logger.exception(f"Error making HTTP request: {error}")
             return False
 
 class Actions(HTTPRequestHandler):
-    def __init__(self,
-                 chatdj: bool = False,
-                 vip_audio: bool = False,
-                 command_parser: bool = False,
-                 custom_actions: bool = False,
-                 spray_bottle: bool = False,
-                 couch_buzzer: bool = False,
-                 obs_integration: bool = False):
-        self.chatdj_enabled = chatdj
+    def __init__(self, **kwargs):
+        """Initialize Actions with optional feature flags.
+        
+        Args:
+            **kwargs: Feature flags for enabling different functionalities:
+                - chatdj (bool): Enable ChatDJ functionality
+                - vip_audio (bool): Enable VIP audio functionality
+                - command_parser (bool): Enable command parsing
+                - custom_actions (bool): Enable custom actions
+                - spray_bottle (bool): Enable spray bottle functionality
+                - couch_buzzer (bool): Enable couch buzzer functionality
+                - obs_integration (bool): Enable OBS integration
+        """
+        self.chatdj_enabled = kwargs.get('chatdj', False)
         logger.debug(f"ChatDJ enabled: {self.chatdj_enabled}")
-        self.vip_audio_enabled = vip_audio
+        self.vip_audio_enabled = kwargs.get('vip_audio', False)
         logger.debug(f"VIP Audio enabled: {self.vip_audio_enabled}")
-        self.command_parser_enabled = command_parser
+        self.command_parser_enabled = kwargs.get('command_parser', False)
         logger.debug(f"Command Parser enabled: {self.command_parser_enabled}")
-        self.custom_actions_enabled = custom_actions
+        self.custom_actions_enabled = kwargs.get('custom_actions', False)
         logger.debug(f"Custom Actions enabled: {self.custom_actions_enabled}")
-        self.spray_bottle_enabled = spray_bottle
+        self.spray_bottle_enabled = kwargs.get('spray_bottle', False)
         logger.debug(f"Spray Bottle enabled: {self.spray_bottle_enabled}")
-        self.couch_buzzer_enabled = couch_buzzer
+        self.couch_buzzer_enabled = kwargs.get('couch_buzzer', False)
         logger.debug(f"Couch Buzzer enabled: {self.couch_buzzer_enabled}")
-        self.obs_integration_enabled = obs_integration
+        self.obs_integration_enabled = kwargs.get('obs_integration', False)
         logger.debug(f"OBS Integration enabled: {self.obs_integration_enabled}")
 
-        from . import config
-
         if self.chatdj_enabled:
-            from chatdj import SongExtractor, AutoDJ
-            from . import song_cache_collection
-
             self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
             self.auto_dj = AutoDJ(
                 config.get("Spotify", "client_id"),
@@ -74,7 +80,6 @@ class Actions(HTTPRequestHandler):
             logger.debug(f"self.couch_buzzer_url: {self.couch_buzzer_url}")
 
         if self.obs_integration_enabled:
-            from handlers.obshandler import OBSHandler
             self.obs = OBSHandler(
                 host=config.get("OBS", "host"),
                 port=config.getint("OBS", "port"),
@@ -98,8 +103,8 @@ class Actions(HTTPRequestHandler):
             cached_song = self.song_cache_collection.find_one({'artist': song_info['artist'].lower(), 'song': song_info['song'].lower()})
             logger.debug(f'Cached song: {cached_song}')
             return cached_song
-        except Exception as e:
-            logger.exception('Failed to retrieve cached song.', exc_info=e)
+        except Exception as error:
+            logger.error(f"Error retrieving cached song: {error}")
             return None
 
     def cache_song(self, song_info: Dict[str, str], optimized_results: List[Dict]) -> bool:
@@ -113,8 +118,8 @@ class Actions(HTTPRequestHandler):
             inserted_id = self.song_cache_collection.insert_one(doc).inserted_id
             logger.debug(f'Inserted cache document ID: {inserted_id}')
             return True
-        except Exception as e:
-            logger.exception('Failed to save cached song.', exc_info=e)
+        except Exception as error:
+            logger.error(f"Error caching song: {error}")
             return False
 
     def _custom_score(self, query_artist: str, query_song: str, result_artist: str, result_song: str) -> float:
@@ -142,8 +147,8 @@ class Actions(HTTPRequestHandler):
             return False
         try:
             return self.auto_dj.playback_active()
-        except Exception as e:
-            logger.exception("Error getting playback state", exc_info=e)
+        except Exception as error:
+            logger.error(f"Error getting playback state: {error}")
             return False
 
     def find_song_spotify(self, song_info: Dict[str, str]) -> Optional[str]:
@@ -184,8 +189,8 @@ class Actions(HTTPRequestHandler):
                 logger.warning(f"Failed to cache optimized results for {song_info}.")
 
             return optimized_results[0]['uri']
-        except Exception as e:
-            logger.exception(f"Error finding song on Spotify: {e}")
+        except Exception as error:
+            logger.error(f"Error finding song on Spotify: {error}")
             return None
 
     def available_in_market(self, song_uri: str) -> bool:
@@ -199,8 +204,8 @@ class Actions(HTTPRequestHandler):
             song_markets = self.auto_dj.get_song_markets(song_uri)
             logger.debug(f'User market: {user_market}, Song markets: {song_markets}')
             return user_market in song_markets
-        except Exception as e:
-            logger.exception(f"Error checking market availability: {e}")
+        except Exception as error:
+            logger.error(f"Error checking market availability: {error}")
             return False
 
     def add_song_to_queue(self, uri: str, requester_name: str, song_details: str) -> bool:
@@ -215,8 +220,8 @@ class Actions(HTTPRequestHandler):
                 self.trigger_song_requester_overlay(requester_name, song_details, self.request_overlay_duration if self.request_overlay_duration else 10)
                 return True
             return False
-        except Exception as e:
-            logger.exception(f"Error adding song to queue: {e}")
+        except Exception as error:
+            logger.error(f"Error adding song to queue: {error}")
             return False
 
     def skip_song(self) -> bool:
@@ -228,8 +233,8 @@ class Actions(HTTPRequestHandler):
         logger.debug('Executing skip song action.')
         try:
             return self.auto_dj.skip_song()
-        except Exception as e:
-            logger.exception(f"Error skipping song: {e}")
+        except Exception as error:
+            logger.error(f"Error skipping song: {error}")
             return False
     
     def trigger_spray(self) -> bool:

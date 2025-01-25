@@ -2,12 +2,11 @@ import logging
 import queue
 import threading
 import time
-
+import urllib.parse
 
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-
-import urllib.parse
+from helpers.cbevents import CBEvents
 
 logger = logging.getLogger('mongobate.handlers.eventhandler')
 logger.setLevel(logging.DEBUG)
@@ -15,28 +14,42 @@ logger.setLevel(logging.DEBUG)
 
 class EventHandler:
 
-    def __init__(
-        self,
-        mongo_username,
-        mongo_password,
-        mongo_host,
-        mongo_port,
-        mongo_db,
-        mongo_collection,
-        user_collection=None,
-        vip_refresh_interval=300,
-        admin_refresh_interval=300,
-        action_refresh_interval=300,
-        aws_key=None,
-        aws_secret=None):
-        from helpers.cbevents import CBEvents
-
+    def __init__(self, **kwargs):
+        """Initialize EventHandler with MongoDB connection settings.
+        
+        Args:
+            **kwargs: Connection settings:
+                - mongo_username (str): MongoDB username
+                - mongo_password (str): MongoDB password
+                - mongo_host (str): MongoDB host
+                - mongo_port (int): MongoDB port
+                - mongo_db (str): MongoDB database name
+                - mongo_collection (str): MongoDB collection name
+                - user_collection (str, optional): User collection name
+                - vip_refresh_interval (int, optional): VIP refresh interval in seconds
+                - admin_refresh_interval (int, optional): Admin refresh interval in seconds
+                - action_refresh_interval (int, optional): Action refresh interval in seconds
+                - aws_key (str, optional): AWS access key
+                - aws_secret (str, optional): AWS secret key
+        """
         self.event_queue = queue.Queue()
         self._stop_event = threading.Event()
 
         self.cb_events = CBEvents()
+        self.checks = self.cb_events.checks
+        self.commands = self.cb_events.commands
 
         self.mongo_connection_uri = None
+        aws_key = kwargs.get('aws_key')
+        aws_secret = kwargs.get('aws_secret')
+        mongo_host = kwargs.get('mongo_host')
+        mongo_port = kwargs.get('mongo_port')
+        mongo_username = kwargs.get('mongo_username')
+        mongo_password = kwargs.get('mongo_password')
+        mongo_db = kwargs.get('mongo_db')
+        mongo_collection = kwargs.get('mongo_collection')
+        user_collection = kwargs.get('user_collection')
+
         if aws_key and aws_secret:
             aws_key_pe = urllib.parse.quote_plus(aws_key)
             aws_secret_pe = urllib.parse.quote_plus(aws_secret)
@@ -71,8 +84,8 @@ class EventHandler:
                 )
             else:
                 self.user_collection = None
-        except ConnectionFailure as e:
-            logger.exception("Could not connect to MongoDB:", exc_info=e)
+        except ConnectionFailure as error:
+            logger.exception(f"Could not connect to MongoDB: {error}")
             raise
 
         self.vip_users = None
@@ -81,17 +94,17 @@ class EventHandler:
 
         if 'vip_audio' in self.cb_events.active_components:
             self.vip_users = {}
-            self.vip_refresh_interval = vip_refresh_interval
+            self.vip_refresh_interval = kwargs.get('vip_refresh_interval', 300)
             self.load_vip_users()
         
         if 'command_parser' in self.cb_events.active_components:
             self.admin_users = {}
-            self.admin_refresh_interval = admin_refresh_interval
+            self.admin_refresh_interval = kwargs.get('admin_refresh_interval', 300)
             self.load_admin_users()
         
         if 'custom_actions' in self.cb_events.active_components:
             self.action_users = {}
-            self.action_refresh_interval = action_refresh_interval
+            self.action_refresh_interval = kwargs.get('action_refresh_interval', 300)
             self.load_action_users()
 
     def load_vip_users(self):
@@ -101,8 +114,8 @@ class EventHandler:
                 logger.debug(f"user: {user}")
                 self.vip_users[user['username']] = user['audio_file']
             logger.info(f"Loaded {len(self.vip_users)} VIP users.")
-        except Exception as e:
-            logger.exception("Error loading VIP users:", exc_info=e)
+        except Exception as error:
+            logger.exception("Error loading VIP users:", exc_info=error)
     
     def load_admin_users(self):
         try:
@@ -111,8 +124,8 @@ class EventHandler:
                 logger.debug(f"user: {user}")
                 self.admin_users[user['username']] = True
             logger.info(f"Loaded {len(self.admin_users)} admin users.")
-        except Exception as e:
-            logger.exception("Error loading admin users:", exc_info=e)
+        except Exception as error:
+            logger.exception("Error loading admin users:", exc_info=error)
 
     def load_action_users(self):
         try:
@@ -122,8 +135,8 @@ class EventHandler:
             
                 self.action_users[user['username']] = user['custom']
             logger.info(f"Loaded {len(self.action_users)} action users.")
-        except Exception as e:
-            logger.exception("Error loading action users:", exc_info=e)
+        except Exception as error:
+            logger.exception("Error loading action users:", exc_info=error)
 
     def privileged_user_refresh(self):
         last_load_vip = time.time()
@@ -148,41 +161,86 @@ class EventHandler:
             #logger.debug(f"song_queue_status: {song_queue_status}")
             time.sleep(5)
 
+    def process_event(self, _event):
+        """Process an event from the queue."""
+        try:
+            logger.info("Processing event.")
+            return True
+        except Exception as error:
+            logger.exception("Error processing event", exc_info=error)
+            return False
+
     def event_processor(self):
         """
         Continuously process events from the event queue.
         """
         while not self._stop_event.is_set():
             try:
-                event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
-                privileged_users = {
-                    "vip": self.vip_users,
-                    "admin": self.admin_users,
-                    "custom_actions": self.action_users
-                }
-                process_result = self.cb_events.process_event(event, privileged_users)
-                logger.debug(f"process_result: {process_result}")
+                # Timeout to check for stop signal
+                event = self.event_queue.get(timeout=1)
+                self.process_event(event)
                 self.event_queue.task_done()
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
-            except Exception as e:
-                logger.exception("Error in event processor:" , exc_info=e)
+            except Exception as error:
+                logger.exception("Error in event processor", exc_info=error)
 
     def watch_changes(self):
+        """
+        Watch for changes in the MongoDB collection.
+        """
         try:
-            with self.event_collection.watch(max_await_time_ms=1000) as stream:
-                while not self._stop_event.is_set():
-                    change = stream.try_next()
-                    if change is None:
-                        continue
-                    if change["operationType"] == "insert":
-                        doc = change["fullDocument"]
-                        self.event_queue.put(doc)
-        except Exception as e:
-            logger.exception("An error occurred while watching changes: %s", exc_info=e)
-        finally:
-            if not self._stop_event.is_set():
-                self.cleanup()
+            with self.event_collection.watch() as stream:
+                for change in stream:
+                    logger.debug(f"Change detected: {change}")
+                    self.event_queue.put(change)
+        except Exception as error:
+            logger.exception("Error watching changes", exc_info=error)
+
+    def update_user_list(self):
+        """
+        Update the list of users from MongoDB.
+        """
+        try:
+            if not self.user_collection:
+                logger.warning("No user collection available")
+                return False
+
+            vip_users = []
+            admin_users = []
+            action_users = []
+
+            for user in self.user_collection.find():
+                if user.get('vip', False):
+                    vip_users.append(user['username'])
+                if user.get('admin', False):
+                    admin_users.append(user['username'])
+                if user.get('custom_actions', False):
+                    action_users.append(user['username'])
+
+            self.vip_users = vip_users
+            self.admin_users = admin_users
+            self.action_users = action_users
+
+            logger.debug(f"VIP Users: {self.vip_users}")
+            logger.debug(f"Admin Users: {self.admin_users}")
+            logger.debug(f"Action Users: {self.action_users}")
+
+            return True
+        except Exception as error:
+            logger.exception("Error updating user list", exc_info=error)
+            return False
+
+    def user_list_monitor(self):
+        """
+        Monitor and update the user list periodically.
+        """
+        while not self._stop_event.is_set():
+            try:
+                self.update_user_list()
+            except Exception as error:
+                logger.exception("Error in user list monitor", exc_info=error)
+            time.sleep(60)  # Update every minute
 
     def run(self):
         logger.info("Starting change stream watcher thread...")
@@ -228,7 +286,6 @@ class EventHandler:
 
 if __name__ == "__main__":
     import configparser
-    import time
 
     config = configparser.ConfigParser()
     config.read("config.ini")

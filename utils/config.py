@@ -1,7 +1,9 @@
 # Create a centralized config manager
 from pathlib import Path
 import configparser
-import os
+import logging
+
+logger = logging.getLogger('mongobate.utils.config')
 
 class ConfigManager:
     _instance = None

@@ -1,9 +1,10 @@
+"""Database module for MongoDB operations and configuration."""
+
 import configparser
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 import sys
-import time
 
 from handlers import DBHandler
 
@@ -62,15 +63,16 @@ if __name__ == '__main__':
         else None
     )
 
-    logger.debug('Initializing database handler.')
+    logger.debug('Initializing DB handler.')
     db_handler = DBHandler(
-        mongo_username, mongo_password, mongo_host, mongo_port, mongo_db, mongo_collection,
-        events_api_url=events_api_url,
-        requests_per_minute=requests_per_minute,
-        aws_key=aws_key, aws_secret=aws_secret)
-
-    logger.debug('Running database handler.')
-    # Execution blocks here until the DBHandler is stopped.
+        mongo_username,
+        mongo_password,
+        mongo_port,
+        mongo_db,
+        mongo_host,
+        aws_key,
+        aws_secret
+    )
     db_handler.run()
 
     logger.info("Application has shut down.")

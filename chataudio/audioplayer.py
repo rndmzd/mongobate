@@ -1,92 +1,79 @@
 import logging
-import sys
-from threading import Thread, Event
-
+import os
+import queue
+import threading
+import time
 import pygame
-import pygame._sdl2.audio as sdl2_audio
 
 logger = logging.getLogger('mongobate.chataudio.audioplayer')
-logger.setLevel(logging.DEBUG)
 
 class AudioPlayer:
-    def __init__(self, device_name=None):
+    def __init__(self):
+        """Initialize the audio player."""
+        self.audio_queue = queue.Queue()
+        self._stop_event = threading.Event()
+        self.audio_thread = None
+        self.current_audio = None
+        self.audio_files = []
+        self.audio_channels = []
+        self.max_channels = 8
+
         pygame.mixer.init()
-        self.device_name = device_name
-        self.current_device = None
-        if not self.device_name:
-            self.device_name = self.user_select_audio_device()
-        device_select_result = self.set_output_device(self.device_name)
-        logger.debug(f"device_select_result: {device_select_result}")
-        self.play_thread = None
-        self.stop_event = Event()
+        pygame.mixer.set_num_channels(self.max_channels)
+        for i in range(self.max_channels):
+            self.audio_channels.append(pygame.mixer.Channel(i))
 
-    def get_output_devices(self, capture_devices=False):
-        init_by_me = not pygame.mixer.get_init()
-        if init_by_me:
-            pygame.mixer.init()
-        devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
-        logger.debug(f"devices: {devices}")
-        if init_by_me:
-            pygame.mixer.quit()
-        return devices
+    def play_audio(self, audio_file_path):
+        """Add an audio file to the queue."""
+        if not os.path.exists(audio_file_path):
+            logger.error(f"Audio file not found: {audio_file_path}")
+            return False
 
-    def user_select_audio_device(self):
-        pygame.mixer.init()
-        pygame.mixer.quit()
-        pygame.mixer.init(44100, -16, 2, 1024)
-        output_devices = self.get_output_devices()
-        print("Available audio devices:\n")
-        for i in range(len(output_devices)):
-            device_name = output_devices[i]
-            print(f"{i+1} => {device_name}")
         try:
-            user_selection = int(input(f"\nSelect an audio device (1-{len(output_devices)}): ")) # or press Enter to use the default device: ")
-        except KeyboardInterrupt:
-            logger.info("User aborted selection. Exiting.")
-            sys.exit()
-        logger.debug(f"user_selection: {user_selection}")
-        device_num = user_selection - 1
-        logger.debug(f"device_num: {device_num}")
-        return output_devices[device_num]
+            # Check if audio file is already loaded
+            for i, audio in enumerate(self.audio_files):
+                if audio['path'] == audio_file_path:
+                    logger.debug(f"Audio file already loaded: {audio_file_path}")
+                    self.audio_queue.put(audio['sound'])
+                    return True
 
-    def set_output_device(self, device_name):
-        output_devices = self.get_output_devices()
-        for i in range(len(output_devices)):
-            if output_devices[i] == device_name:
-                pygame.mixer.quit()
-                pygame.mixer.init(devicename=device_name)
-                self.current_device = device_name
-                logger.info(f"Set output device to: {device_name}")
-                return True
-        logger.warning(f"Device '{device_name}' not found. Using default device.")
-        return False
+            # Load new audio file
+            sound = pygame.mixer.Sound(audio_file_path)
+            self.audio_files.append({'path': audio_file_path, 'sound': sound})
+            self.audio_queue.put(sound)
+            return True
+        except Exception as error:
+            logger.exception(f"Error loading audio file: {error}")
+            return False
 
-    def play_audio(self, file_path):
-        if self.play_thread and self.play_thread.is_alive():
-            logger.warning("Audio is already playing. Stopping current playback.")
-            self.stop_playback()
+    def play_queued_audio(self):
+        """Play audio files from the queue."""
+        while not self._stop_event.is_set():
+            try:
+                # Check for available channel
+                for i, channel in enumerate(self.audio_channels):
+                    if not channel.get_busy():
+                        sound = self.audio_queue.get_nowait()
+                        channel.play(sound)
+                        self.audio_queue.task_done()
+                        break
+                time.sleep(0.1)
+            except queue.Empty:
+                time.sleep(0.1)
+            except Exception as error:
+                logger.exception(f"Error playing audio: {error}")
+                time.sleep(0.1)
 
-        self.stop_event.clear()
-        self.play_thread = Thread(target=self._play_audio_thread, args=(file_path,))
-        self.play_thread.start()
+    def start(self):
+        """Start the audio player thread."""
+        if not self.audio_thread or not self.audio_thread.is_alive():
+            self._stop_event.clear()
+            self.audio_thread = threading.Thread(target=self.play_queued_audio, daemon=True)
+            self.audio_thread.start()
 
-    def _play_audio_thread(self, file_path):
-        try:
-            pygame.mixer.music.load(file_path)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy() and not self.stop_event.is_set():
-                pygame.time.Clock().tick(10)
-        except Exception as e:
-            logger.exception(f"Error playing audio file: {file_path}", exc_info=e)
-        finally:
-            pygame.mixer.music.stop()
-
-    def stop_playback(self):
-        self.stop_event.set()
-        if self.play_thread:
-            self.play_thread.join()
-        pygame.mixer.music.stop()
-
-    def cleanup(self):
-        self.stop_playback()
+    def stop(self):
+        """Stop the audio player thread."""
+        self._stop_event.set()
+        if self.audio_thread and self.audio_thread.is_alive():
+            self.audio_thread.join()
         pygame.mixer.quit()

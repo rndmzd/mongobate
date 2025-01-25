@@ -1,3 +1,5 @@
+"""Main application module for handling events and MongoDB operations."""
+
 import configparser
 import logging
 from logging.handlers import RotatingFileHandler
@@ -63,12 +65,12 @@ if __name__ == '__main__':
 
     logger.debug('Initializing event handler.')
     event_handler = EventHandler(
-        mongo_username,
-        mongo_password,
-        mongo_host,
-        mongo_port,
-        mongo_db,
-        event_collection,
+        mongo_username=mongo_username,
+        mongo_password=mongo_password,
+        mongo_host=mongo_host,
+        mongo_port=mongo_port,
+        mongo_db=mongo_db,
+        mongo_collection=event_collection,
         user_collection=user_collection,
         vip_refresh_interval=vip_refresh_interval,
         admin_refresh_interval=admin_refresh_interval,

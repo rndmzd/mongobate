@@ -1,7 +1,6 @@
-import configparser
 import logging
-
 import yaml
+from . import config
 
 logger = logging.getLogger('mongobate.helpers.commands')
 logger.setLevel(logging.DEBUG)
@@ -9,16 +8,13 @@ logger.setLevel(logging.DEBUG)
 
 class Commands:
     def __init__(self, actions=None):
-        from . import config
-        
         self.commands_file = config.get('General', 'commands_file')
         self.commands = {}
-
         self.actions = actions
 
     def refresh_commands(self):
         logger.debug("Refreshing commands.")
-        with open(self.commands_file, 'r') as yaml_file:
+        with open(self.commands_file, 'r', encoding='utf-8') as yaml_file:
             try:
                 self.commands = yaml.safe_load(yaml_file)
                 return True
@@ -47,7 +43,7 @@ class Commands:
                 scene_result = self.actions.set_scene('main')
                 logger.debug(f"scene_result: {scene_result}")
             return True
-        except Exception as e:
-            logger.exception('Failed to process command.', exc_info=e)
+        except Exception as error:
+            logger.exception('Failed to process command.', exc_info=error)
             return False
         

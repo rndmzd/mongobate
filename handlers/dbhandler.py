@@ -74,8 +74,8 @@ class DBHandler:
 
             self.mongo_db = self.mongo_client[self.mongo_db]
             self.event_collection = self.mongo_db[self.mongo_collection]
-        except ConnectionFailure as e:
-            logger.exception(f"Could not connect to MongoDB: {e}")
+        except ConnectionFailure as error:
+            logger.exception(f"Could not connect to MongoDB: {error}")
             raise
 
     def archive_event(self, event):
@@ -84,8 +84,8 @@ class DBHandler:
             logger.debug(f"event['timestamp']: {event['timestamp']}")
             result = self.event_collection.insert_one(event)
             logger.debug(f"result.inserted_id: {result.inserted_id}")
-        except Exception as e:
-            logger.exception(f"Error archiving event: {event}", exc_info=e)
+        except Exception as error:
+            logger.exception(f"Error archiving event: {event}", exc_info=error)
 
     def event_processor(self):
         """
@@ -99,18 +99,19 @@ class DBHandler:
                 self.event_queue.task_done()
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
-            except Exception as e:
-                logger.exception("Error in event processor", exc_info=e)
+            except Exception as error:
+                logger.exception("Error in event processor", exc_info=error)
 
     def long_polling(self):
         """
         Continuously poll the API and put events into the queue.
         """
         url_next = self.events_api_url
+        timeout = 30  # 30 second timeout for API requests
 
         while not self._stop_event.is_set():
             try:
-                response = requests.get(url_next)
+                response = requests.get(url_next, timeout=timeout)
                 if response.status_code == 200:
                     data = response.json()
                     for event in data["events"]:
@@ -119,8 +120,10 @@ class DBHandler:
                 else:
                     logger.error(
                         f"Error: Received status code {response.status_code}")
-            except RequestException as e:
-                logger.error(f"Request failed: {e}")
+            except requests.Timeout:
+                logger.error(f"Request to {url_next} timed out after {timeout} seconds")
+            except RequestException as error:
+                logger.error(f"Request failed: {error}")
 
             time.sleep(self.interval)
 

@@ -129,7 +129,8 @@ result = client['mongobate']['events'].aggregate([
 word_frequencies = {doc['_id'].lstrip(':'): doc['count'] for doc in result if doc['_id']}
 
 # Function for bright contrasting colors
-def bright_color_func(word=None, font_size=None, position=None, orientation=None, **kwargs):
+def bright_color_func(*_args, **_kwargs):
+    """Generate a bright contrasting color for the word cloud."""
     return f"hsl({random.randint(0, 360)}, 100%, 80%)"  # High saturation and lightness for visibility
 
 # Generate word cloud

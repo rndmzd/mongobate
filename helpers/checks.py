@@ -1,12 +1,11 @@
 import logging
+from . import config
 
 logger = logging.getLogger('mongobate.helpers.checks')
 logger.setLevel(logging.DEBUG)
 
 class Checks:
     def __init__(self):
-        from . import config
-
         self.config = config
 
         self.song_cost = self.config.getint("General", "song_cost")
@@ -16,7 +15,7 @@ class Checks:
     
     def get_active_components(self):
         active_components = []
-        for component in [comp for comp in self.config['Components']]:
+        for component in list(self.config['Components']):
             component_val = self.config.getboolean('Components', component)
             logger.debug(f"{component} -> {component_val}")
             if component_val:

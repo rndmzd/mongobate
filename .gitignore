@@ -10,3 +10,5 @@ commands.yaml
 chatdj/server/
 .env
 **_wordcloud.png
+**/repomix*
+.repomixignore

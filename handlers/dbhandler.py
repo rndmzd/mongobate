@@ -32,7 +32,7 @@ class DBHandler:
         self.mongo_username = mongo_username
         self.mongo_password = mongo_password
         self.mongo_host = mongo_host
-        self.mongo_port = int(mongo_port)
+        self.mongo_port = mongo_port
         self.mongo_db = mongo_db
         self.mongo_collection = mongo_collection
         self.events_api_url = events_api_url

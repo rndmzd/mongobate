@@ -65,13 +65,16 @@ if __name__ == '__main__':
 
     logger.debug('Initializing DB handler.')
     db_handler = DBHandler(
-        mongo_username,
-        mongo_password,
-        mongo_port,
-        mongo_db,
-        mongo_host,
-        aws_key,
-        aws_secret
+        mongo_username=mongo_username,
+        mongo_password=mongo_password,
+        mongo_host=mongo_host,
+        mongo_port=mongo_port,
+        mongo_db=mongo_db,
+        mongo_collection=mongo_collection,
+        events_api_url=events_api_url,
+        requests_per_minute=requests_per_minute,
+        aws_key=aws_key,
+        aws_secret=aws_secret
     )
     db_handler.run()
 

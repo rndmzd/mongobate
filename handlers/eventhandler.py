@@ -52,7 +52,8 @@ class EventHandler:
 
         try:
             if self.mongo_connection_uri:
-                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                sanitized_uri = self.mongo_connection_uri.replace(aws_secret_pe, "****")
+                logger.debug(f"Connecting with URI: {sanitized_uri}")
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
                 self.mongo_client = MongoClient(

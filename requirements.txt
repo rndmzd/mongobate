@@ -2,7 +2,7 @@ annotated-types==0.7.0
 anyio==4.4.0
 boto3==1.34.138
 botocore==1.34.138
-certifi==2024.6.2
+certifi==2024.7.4
 charset-normalizer==3.3.2
 colorama==0.4.6
 distro==1.9.0

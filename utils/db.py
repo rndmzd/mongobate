@@ -29,7 +29,7 @@ class DatabaseManager:
         host = urllib.parse.quote_plus(config.get('MongoDB', 'host'))
         port = urllib.parse.quote_plus(config.get('MongoDB', 'port'))
         
-        uri = f"mongodb://{aws_key}:{aws_secret}@[{host}]:{port}/?authMechanism=MONGODB-AWS&authSource=$external"
+        uri = f"mongodb://{aws_key}:****@[{host}]:{port}/?authMechanism=MONGODB-AWS&authSource=$external"
         return MongoClient(uri)
         
     def _get_standard_connection(self, config):

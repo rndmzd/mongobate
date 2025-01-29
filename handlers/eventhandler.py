@@ -45,7 +45,7 @@ class EventHandler:
 
             # Construct the URI with proper escaping and formatting
             self.mongo_connection_uri = (
-                f"mongodb://{aws_key_pe}:{aws_secret_pe}@"
+                f"mongodb://{aws_key_pe}:****@"
                 f"[{mongo_host_pe}]:{mongo_port_pe}/"
                 f"?authMechanism=MONGODB-AWS&authSource=$external"
             )

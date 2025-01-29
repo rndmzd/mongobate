@@ -59,10 +59,19 @@ class DBHandler:
                 f"?authMechanism=MONGODB-AWS&authSource=$external"
             )
 
+    def _sanitize_uri(self, uri):
+        # Remove sensitive information from the URI
+        parts = uri.split('@')
+        if len(parts) == 2:
+            sanitized_uri = parts[1]  # Keep only the part after '@'
+            return f"mongodb://<credentials>@{sanitized_uri}"
+        return uri
+
     def connect_to_mongodb(self):
         try:
             if self.mongo_connection_uri:
-                logger.debug(f"Connecting with URI: {self.mongo_connection_uri}")
+                sanitized_uri = self._sanitize_uri(self.mongo_connection_uri)
+                logger.debug(f"Connecting with URI: {sanitized_uri}")
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
                 self.mongo_client = MongoClient(

@@ -239,7 +239,7 @@ class Actions(HTTPRequestHandler):
     
     def trigger_couch_buzzer(self, duration=1) -> bool:
         """Trigger the couch buzzer action."""
-        credentials = f"{self.couch_buzzer_username}:****"
+        credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         return self.make_request(
             self.couch_buzzer_url,

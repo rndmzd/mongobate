@@ -369,8 +369,6 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    logging.basicConfig()
-
     song_extractor = SongExtractor(os.getenv('OPENAI_API_KEY'))
     auto_dj = AutoDJ(
         os.getenv('SPOTIFY_CLIENT_ID'),

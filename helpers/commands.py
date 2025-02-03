@@ -1,10 +1,9 @@
 import configparser
-import logging
-
 import yaml
 
-logger = logging.getLogger('mongobate.helpers.commands')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='helpers.commands')
 
 
 class Commands:

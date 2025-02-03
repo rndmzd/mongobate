@@ -1,16 +1,15 @@
-import logging
 import queue
 import threading
 import time
-
 
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
 import urllib.parse
 
-logger = logging.getLogger('mongobate.handlers.eventhandler')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='handlers.eventhandler')
 
 
 class EventHandler:

@@ -1,12 +1,12 @@
-import logging
 import asyncio
 import simpleobsws
 from typing import Optional, Dict, Any
 import yaml
 from pathlib import Path
 
-logger = logging.getLogger('mongobate.handlers.obshandler')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='handlers.obshandler')
 
 class OBSHandler:
     def __init__(self, host: str = 'localhost', port: int = 4455, password: Optional[str] = None):

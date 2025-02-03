@@ -1,12 +1,12 @@
-import logging
 import sys
 from threading import Thread, Event
 
 import pygame
 import pygame._sdl2.audio as sdl2_audio
 
-logger = logging.getLogger('mongobate.chataudio.audioplayer')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='chataudio.audioplayer')
 
 class AudioPlayer:
     def __init__(self, device_name=None):

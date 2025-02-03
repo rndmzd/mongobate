@@ -1,3 +1,7 @@
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='helpers.eventprocessor')
+
 # Create a base event processor class
 class BaseEventProcessor:
     def process_event(self, event: dict) -> bool:

@@ -1,15 +1,14 @@
 import datetime
 from bson import ObjectId
-import logging
 import simplejson as json
 import threading
 import time
 
 from utils import MongoJSONEncoder
 from chataudio.audioplayer import AudioPlayer
+from utils.logging_config import setup_logging
 
-logger = logging.getLogger('mongobate.helpers.cbevents')
-logger.setLevel(logging.DEBUG)
+logger = setup_logging(component='helpers.cbevents')
 
 
 class CBEvents:

@@ -1,5 +1,4 @@
 import datetime
-import logging
 import queue
 import threading
 import time
@@ -12,8 +11,9 @@ from pymongo.errors import ConnectionFailure
 
 import urllib.parse
 
-logger = logging.getLogger('mongobate.handlers.dbhandler')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='handlers.dbhandler')
 
 
 class DBHandler:

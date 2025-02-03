@@ -1,12 +1,12 @@
-import logging
 from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz
 import requests
 import base64
 
-logger = logging.getLogger('mongobate.helpers.actions')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='helpers.actions')
 
 # Create a base HTTP request handler class to handle common request functionality
 class HTTPRequestHandler:

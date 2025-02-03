@@ -1,4 +1,3 @@
-import logging
 from typing import List, Dict, Optional
 import sys
 import time
@@ -6,8 +5,9 @@ import time
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
 
-logger = logging.getLogger('mongobate.chatdj')
-logger.setLevel(logging.DEBUG)
+from utils.logging_config import setup_logging
+
+logger = setup_logging(component='chatdj')
 
 class SongExtractor:
     def __init__(self, api_key):

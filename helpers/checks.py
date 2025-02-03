@@ -1,7 +1,6 @@
-import logging
+from utils.logging_config import setup_logging
 
-logger = logging.getLogger('mongobate.helpers.checks')
-logger.setLevel(logging.DEBUG)
+logger = setup_logging(component='helpers.checks')
 
 class Checks:
     def __init__(self):

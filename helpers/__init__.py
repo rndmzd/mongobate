@@ -1,5 +1,4 @@
 import configparser
-import logging
 import os
 from pathlib import Path
 from pymongo import MongoClient
@@ -8,9 +7,9 @@ from helpers.actions import Actions
 from helpers.checks import Checks
 from helpers.cbevents import CBEvents
 from helpers.commands import Commands
+from utils.logging_config import setup_logging
 
-logger = logging.getLogger('mongobate.chatdj')
-logger.setLevel(logging.DEBUG)
+logger = setup_logging(component='helpers')
 
 config_path = Path(__file__).parent.parent / 'config.ini'
 

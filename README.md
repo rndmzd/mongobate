@@ -5,12 +5,14 @@ A Python-based application for managing chat interactions, music playback, and e
 ## Features
 
 ### Core Components
+
 - **Event Handler**: Processes and manages various chat events and user interactions
 - **Database Handler**: Manages MongoDB connections and data operations
 - **Chat DJ**: Integrates with Spotify for music playback and queue management
 - **Audio Player**: Handles audio playback for various events and actions
 
 ### Key Features
+
 - **Spotify Integration**
   - Song request handling and queue management
   - Market availability checking
@@ -47,17 +49,20 @@ A Python-based application for managing chat interactions, music playback, and e
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/yourusername/mongobate.git
 cd mongobate
 ```
 
 2. Install required dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. Create and configure `config.ini`:
+
 ```ini
 [MongoDB]
 username = your_username
@@ -108,11 +113,13 @@ vip_audio_directory = audio/vip
 ### Basic Setup
 
 1. Start the application with database handler:
+
 ```bash
 python app_and_db.py
 ```
 
 2. Start the application and database handler separately:
+
 ```bash
 python db.py
 python app.py
@@ -121,6 +128,7 @@ python app.py
 ### Component Configuration
 
 Enable or disable components in the `config.ini` file under the `[Components]` section:
+
 - `chat_auto_dj`: Enables Spotify integration and music requests
 - `vip_audio`: Enables VIP user audio triggers
 - `command_parser`: Enables custom command handling
@@ -136,6 +144,7 @@ Enable or disable components in the `config.ini` file under the `[Components]` s
 ### Command System
 
 Use the configured command symbol (default: !) to trigger commands:
+
 - `!WTFU`: Trigger couch buzzer
 - `!BRB`: Switch to BRB scene
 - `!LIVE`: Switch to main scene
@@ -145,17 +154,20 @@ Use the configured command symbol (default: !) to trigger commands:
 The application uses a comprehensive logging system with multiple outputs:
 
 #### File Logging
+
 - Rotating file logs with configurable size and backup count
 - Separate log files for different components
 - Automatic log directory creation
 - UTF-8 encoding support
 
 #### Console Logging
+
 - Real-time console output
 - Formatted messages with timestamp, component name, and log level
 - Color-coded log levels (when supported)
 
 #### Elasticsearch Integration
+
 - Asynchronous logging to Elasticsearch
 - Daily indices with automatic rotation (format: mongobate-YYYY.MM.DD)
 - Bulk indexing for improved performance
@@ -171,6 +183,7 @@ The application uses a comprehensive logging system with multiple outputs:
   - Custom fields support
 
 #### Configuration
+
 ```ini
 [Logging]
 log_file = logs/debug.log
@@ -189,6 +202,7 @@ api_key = your-api-key-here
 ```
 
 #### Features
+
 - Centralized logging configuration
 - Component-specific loggers
 - Asynchronous Elasticsearch logging with batching
@@ -200,6 +214,7 @@ api_key = your-api-key-here
 ## Development
 
 ### Project Structure
+
 ```
 mongobate/
 ├── app.py                 # Main application entry point
@@ -240,4 +255,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - When starting playback of first song to be added to queue, an error may occur but doesn't affect functionality
 
 ## TODO
+
 - Add private message alert system

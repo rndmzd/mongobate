@@ -9,7 +9,7 @@ from helpers.checks import Checks
 from helpers.cbevents import CBEvents
 from helpers.commands import Commands
 
-logger = logging.getLogger('mongobate.chatdj')
+logger = logging.getLogger('helpers.init')
 logger.setLevel(logging.DEBUG)
 
 config_path = Path(__file__).parent.parent / 'config.ini'
@@ -27,4 +27,5 @@ mongo_client = MongoClient(
     directConnection=True)
 mongo_db = mongo_client[os.getenv('MONGO_DATABASE', mongo_config.get('db'))]
 
-song_cache_collection = mongo_db['song_cache_collection']
+song_cache_collection = mongo_db[mongo_config.get('song_cache_collection')]
+user_collection = mongo_db[mongo_config.get('user_collection')]

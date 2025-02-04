@@ -11,9 +11,9 @@ from pymongo.errors import ConnectionFailure
 
 import urllib.parse
 
-from utils.logging_config import setup_logging
+from utils.structured_logging import get_structured_logger
 
-logger = setup_logging(component='handlers.dbhandler')
+logger = get_structured_logger('mongobate.handlers.dbhandler')
 
 
 class DBHandler:
@@ -45,7 +45,8 @@ class DBHandler:
 
         self.mongo_connection_uri = None
         if aws_key and aws_secret:
-            logger.debug("Using AWS authentication for MongoDB.")
+            logger.debug("mongodb.auth.aws",
+                        message="Using AWS authentication for MongoDB")
 
             aws_key_pe = urllib.parse.quote_plus(aws_key)
             aws_secret_pe = urllib.parse.quote_plus(aws_secret)
@@ -71,9 +72,17 @@ class DBHandler:
         try:
             if self.mongo_connection_uri:
                 sanitized_uri = self._sanitize_uri(self.mongo_connection_uri)
-                logger.debug(f"Connecting with URI: {sanitized_uri}")
+                logger.debug("mongodb.connect.aws",
+                           message="Connecting with AWS credentials",
+                           data={"uri": sanitized_uri})
                 self.mongo_client = MongoClient(self.mongo_connection_uri)
             else:
+                logger.debug("mongodb.connect.standard",
+                           message="Connecting with username/password",
+                           data={
+                               "host": self.mongo_host,
+                               "port": self.mongo_port
+                           })
                 self.mongo_client = MongoClient(
                     host=self.mongo_host,
                     port=self.mongo_port,
@@ -83,18 +92,37 @@ class DBHandler:
 
             self.mongo_db = self.mongo_client[self.mongo_db]
             self.event_collection = self.mongo_db[self.mongo_collection]
-        except ConnectionFailure as e:
-            logger.exception(f"Could not connect to MongoDB: {e}")
+            
+            logger.info("mongodb.connect.success",
+                       message="Connected to MongoDB",
+                       data={
+                           "database": self.mongo_db.name,
+                           "collection": self.mongo_collection
+                       })
+                       
+        except ConnectionFailure as exc:
+            logger.exception("mongodb.connect.error",
+                           exc=exc,
+                           message="Failed to connect to MongoDB")
             raise
 
     def archive_event(self, event):
         try:
             event['timestamp'] = datetime.datetime.now(tz=datetime.timezone.utc)
-            logger.debug(f"event['timestamp']: {event['timestamp']}")
+            logger.debug("event.archive.timestamp",
+                        message="Added timestamp to event",
+                        data={"timestamp": event['timestamp']})
+                        
             result = self.event_collection.insert_one(event)
-            logger.debug(f"result.inserted_id: {result.inserted_id}")
-        except Exception as e:
-            logger.exception(f"Error archiving event: {event}", exc_info=e)
+            logger.debug("event.archive.success",
+                        message="Archived event",
+                        data={"document_id": str(result.inserted_id)})
+                        
+        except Exception as exc:
+            logger.exception("event.archive.error",
+                           exc=exc,
+                           message="Failed to archive event",
+                           data={"event": event})
 
     def event_processor(self):
         """
@@ -108,8 +136,10 @@ class DBHandler:
                 self.event_queue.task_done()
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
-            except Exception as e:
-                logger.exception("Error in event processor", exc_info=e)
+            except Exception as exc:
+                logger.exception("event.process.error",
+                               exc=exc,
+                               message="Failed to process event")
 
     def long_polling(self):
         """
@@ -119,45 +149,62 @@ class DBHandler:
 
         while not self._stop_event.is_set():
             try:
+                logger.debug("api.poll",
+                           message="Polling events API",
+                           data={"url": url_next})
+                           
                 response = requests.get(url_next)
                 if response.status_code == 200:
                     data = response.json()
+                    logger.info("api.poll.success",
+                              message="Retrieved events from API",
+                              data={
+                                  "event_count": len(data["events"]),
+                                  "next_url": data["nextUrl"]
+                              })
+                              
                     for event in data["events"]:
                         self.event_queue.put(event)
                     url_next = data["nextUrl"]
                 else:
-                    logger.error(
-                        f"Error: Received status code {response.status_code}")
-            except RequestException as e:
-                logger.error(f"Request failed: {e}")
+                    logger.error("api.poll.error",
+                               message="Failed to retrieve events",
+                               data={"status_code": response.status_code})
+                               
+            except RequestException as exc:
+                logger.exception("api.poll.error",
+                               exc=exc,
+                               message="Failed to poll events API")
 
             time.sleep(self.interval)
 
     def run(self):
+        logger.info("dbhandler.start",
+                   message="Starting database handler")
+                   
         self.connect_to_mongodb()
 
+        logger.debug("thread.processor.start",
+                    message="Starting event processor thread")
         processor_thread = threading.Thread(
             target=self.event_processor, args=(), daemon=True
         )
         processor_thread.start()
 
-        """network_thread = threading.Thread(
-            target=self.long_polling, args=(), daemon=True
-        )
-        network_thread.start()"""
-
         try:
             self.long_polling()
         except KeyboardInterrupt:
-            logger.info("Keyboard interrupt detected. Cleaning up...")
+            logger.info("dbhandler.shutdown",
+                       message="Keyboard interrupt detected, cleaning up")
             self._stop_event.set()
             processor_thread.join()
-            # network_thread.join()
-            logger.info("Done.")
+            logger.info("dbhandler.shutdown.complete",
+                       message="Cleanup complete")
 
     def stop(self):
         self._stop_event.set()
-        logger.info("Stopping DBHandler...")
+        logger.info("dbhandler.stop",
+                   message="Stopping database handler")
 
 
 if __name__ == "__main__":
@@ -168,6 +215,15 @@ if __name__ == "__main__":
     events_api_url = config.get("Events API", "url")
     requests_per_minute = config.getint(
         "Events API", "max_requests_per_minute")
+
+    logger.info("dbhandler.init",
+                message="Initializing database handler",
+                data={
+                    "api": {
+                        "url": events_api_url,
+                        "rate_limit": requests_per_minute
+                    }
+                })
 
     db_handler = DBHandler(
         mongo_username=config.get('MongoDB', 'username'),
@@ -187,7 +243,9 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logger.info('KeyboardInterrupt received. Stopping database handler...')
+        logger.info("dbhandler.shutdown",
+                   message="Keyboard interrupt received")
     finally:
         db_handler.stop()
-        logger.info("Done.")
+        logger.info("dbhandler.shutdown.complete",
+                   message="Database handler stopped")

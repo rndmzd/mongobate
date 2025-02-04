@@ -2,13 +2,84 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
+import json
+import datetime
+import socket
+import traceback
+import asyncio
+from bson import ObjectId
 
 from utils.elastic import AsyncElasticsearchHandler
 from utils.config import ConfigManager
 
-def setup_logging(logger_name='mongobate', component=None):
+class MongoAwareJSONEncoder(json.JSONEncoder):
+    """JSON encoder that can handle MongoDB types and OpenAI objects."""
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        if isinstance(obj, (datetime.date, datetime.time)):
+            return obj.isoformat()
+        if isinstance(obj, bytes):
+            return obj.decode('utf-8', errors='replace')
+        # Handle OpenAI ChatCompletion and related objects
+        if hasattr(obj, 'model_dump'):  # For Pydantic models (OpenAI response objects)
+            return obj.model_dump()
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
+
+class JSONFormatter(logging.Formatter):
+    """Custom JSON formatter for structured logging"""
+    
+    def __init__(self):
+        super().__init__()
+        self.hostname = socket.gethostname()
+
+    def format(self, record):
+        # Base log record
+        log_obj = {
+            "@timestamp": datetime.datetime.fromtimestamp(record.created).isoformat(),
+            "logger": record.name,
+            "level": record.levelname,
+            "host": self.hostname,
+            "process": {
+                "id": record.process,
+                "name": record.processName
+            },
+            "thread": {
+                "id": record.thread,
+                "name": record.threadName
+            },
+            "code": {
+                "file": record.filename,
+                "line": record.lineno,
+                "function": record.funcName
+            }
+        }
+
+        # Handle structured logging records
+        if isinstance(record.msg, dict):
+            # Add all fields from the structured log
+            log_obj.update(record.msg)
+        else:
+            # Legacy string messages
+            log_obj["message"] = record.getMessage()
+
+        # Add exception info if present
+        if record.exc_info:
+            log_obj["error"] = {
+                "type": record.exc_info[0].__name__,
+                "message": str(record.exc_info[1]),
+                "stack_trace": traceback.format_exception(*record.exc_info)
+            }
+
+        return json.dumps(log_obj, cls=MongoAwareJSONEncoder)
+
+def setup_basic_logging(logger_name='mongobate', component=None):
     """
-    Set up logging configuration for the application.
+    Set up basic logging configuration without Elasticsearch.
+    This is safe to use at module level initialization.
     
     Args:
         logger_name: Base name for the logger
@@ -16,38 +87,60 @@ def setup_logging(logger_name='mongobate', component=None):
     """
     config = ConfigManager()
     
-    # Create logger
-    logger_name = f"{logger_name}.{component}" if component else logger_name
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    
-    # Create formatters
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    
-    # Add console handler
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    
-    # Add file handler
-    log_file = config.get("Logging", "log_file")
-    log_dir = os.path.dirname(log_file)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Set up root logger first
+    root_logger = logging.getLogger(logger_name)
+    if not root_logger.handlers:  # Only set up root logger once
+        root_logger.setLevel(logging.DEBUG)
         
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=config.getint("Logging", "log_max_size_mb") * 1024 * 1024,
-        backupCount=config.getint("Logging", "log_backup_count"),
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+        # Create JSON formatter
+        json_formatter = JSONFormatter()
+        
+        # Add console handler with JSON formatting
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(json_formatter)
+        root_logger.addHandler(stream_handler)
+        
+        # Add file handler with JSON formatting
+        log_file = config.get("Logging", "log_file")
+        log_dir = os.path.dirname(log_file)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+            
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=config.getint("Logging", "log_max_size_mb") * 1024 * 1024,
+            backupCount=config.getint("Logging", "log_backup_count"),
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(json_formatter)
+        root_logger.addHandler(file_handler)
     
-    # Add Elasticsearch handler if enabled
+    # Create component logger if needed
+    if component:
+        logger = logging.getLogger(f"{logger_name}.{component}")
+        logger.setLevel(logging.DEBUG)
+        # Don't add handlers to component loggers, let them propagate to root
+        return logger
+    
+    return root_logger
+
+async def setup_logging(logger_name='mongobate', component=None):
+    """
+    Set up full logging configuration including Elasticsearch.
+    Must be called from an async context.
+    
+    Args:
+        logger_name: Base name for the logger
+        component: Optional component name to append to logger name
+    """
+    # First set up basic logging
+    logger = setup_basic_logging(logger_name, component)
+    
+    config = ConfigManager()
+    
+    # Add Elasticsearch handler if enabled - only to root logger
     if config.getboolean("Logging", "elasticsearch_enabled", fallback=False):
+        root_logger = logging.getLogger(logger_name)
         try:
             # Get Elasticsearch config
             es_host = config.get("Elasticsearch", "host")
@@ -64,11 +157,46 @@ def setup_logging(logger_name='mongobate', component=None):
                 api_key=es_api_key,
                 use_ssl=es_use_ssl
             )
-            es_handler.setFormatter(formatter)
-            logger.addHandler(es_handler)
+            es_handler.setFormatter(JSONFormatter())
             
-            logger.info("Elasticsearch logging enabled with API key authentication")
+            # Initialize the handler
+            await es_handler.initialize()
+            
+            # Only add ES handler to root logger
+            if es_handler not in root_logger.handlers:
+                root_logger.addHandler(es_handler)
+            
+            logger.info({
+                "event_type": "elasticsearch.init",
+                "message": "Elasticsearch logging enabled with API key authentication"
+            })
         except Exception as e:
-            logger.error(f"Failed to initialize Elasticsearch logging: {str(e)}")
+            logger.error({
+                "event_type": "elasticsearch.init.error",
+                "message": "Failed to initialize Elasticsearch logging",
+                "error": {
+                    "type": type(e).__name__,
+                    "message": str(e)
+                }
+            })
     
-    return logger 
+    return logger
+
+async def cleanup_logging():
+    """Cleanup function to properly close all logging handlers."""
+    root_logger = logging.getLogger()
+    
+    # Close all handlers
+    for handler in root_logger.handlers[:]:
+        try:
+            if isinstance(handler, AsyncElasticsearchHandler):
+                # Ensure the handler is properly closed
+                await handler.close()
+            else:
+                handler.close()
+            root_logger.removeHandler(handler)
+        except Exception as e:
+            print(f"Error closing handler {handler}: {e}")
+    
+    # Small delay to allow final logs to be processed
+    await asyncio.sleep(0.5) 

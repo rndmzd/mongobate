@@ -5,16 +5,16 @@ import time
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
 
-from utils.logging_config import setup_logging
+from utils.structured_logging import get_structured_logger
 
-logger = setup_logging(component='chatdj')
+logger = get_structured_logger('mongobate.chatdj')
 
 class SongExtractor:
     def __init__(self, api_key):
         self.openai_client = openai.OpenAI(api_key=api_key)
 
     def extract_songs(self, message, song_count=1):
-        """Use OpenAI GPT-4o to extract song titles from the message."""
+        """Use OpenAI GPT-4 to extract song titles from the message."""
         try:
             response = self.openai_client.chat.completions.create(
                 messages=[
@@ -27,43 +27,50 @@ class SongExtractor:
                         "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."
                     }
                 ],
-                model="gpt-4o"
+                model="gpt-4"
             )
 
-            logger.debug(f"response: {response}")
+            logger.debug("song.extract.response", 
+                        message="Received response from OpenAI",
+                        data={"response": response})
 
-            song_titles_response = response.choices[0].message.content.strip().split('\n')
             song_titles = []
+            song_titles_response = response.choices[0].message.content.strip().split('\n')
+            
             for idx, resp in enumerate(song_titles_response):
                 if ' - ' in resp:
                     artist, song = resp.split(' - ', 1)
-                    song_titles.append(
-                        {
-                            "artist": artist.strip(),
-                            "song": song.strip(),
-                            "gpt": True
-                        }
-                    )
+                    song_titles.append({
+                        "artist": artist.strip(),
+                        "song": song.strip(),
+                        "gpt": True
+                    })
                 else:
-                    logger.warning(f"Unexpected format in response: {resp}")
-                    #if len(song_titles_response) == 1 and song_count == 1:
+                    logger.warning("song.extract.format", 
+                                 message="Unexpected format in response",
+                                 data={"response": resp})
+                    
                     if song_count == 1:
-                        logger.warning("Returning original request text as song title.")
-                        song_titles.append(
-                            {
-                                "artist": "",
-                                "song": message,
-                                "gpt": False
-                            }
-                        )
+                        logger.warning("song.extract.fallback",
+                                     message="Using original message as song title")
+                        song_titles.append({
+                            "artist": "",
+                            "song": message,
+                            "gpt": False
+                        })
 
-            logger.debug(f'song_titles: {song_titles}')
-            logger.debug(f"len(song_titles): {len(song_titles)}")
+            logger.debug("song.extract.result",
+                        message="Extracted song titles",
+                        data={
+                            "titles": song_titles,
+                            "count": len(song_titles)
+                        })
 
             return song_titles
 
-        except openai.APIError as e:
-            logger.exception("Failed to extract song titles", exc_info=e)
+        except openai.APIError as exc:
+            logger.exception("song.extract.error", exc=exc,
+                           message="Failed to extract song titles")
             return []
 
 
@@ -76,31 +83,28 @@ class AutoDJ:
             scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-read-private",
             open_browser=False
         )
-        logger.debug("Initializing Spotify client.")
+        
+        logger.info("spotify.init", message="Initializing Spotify client")
         self.spotify = Spotify(auth_manager=self.sp_oauth)
-        logger.debug("Prompting user for playback device selection.")
+        
+        logger.info("spotify.device", message="Selecting playback device")
         self.playback_device = self._select_playback_device()
-        logger.debug("Clearing playback context.")
+        
+        logger.debug("spotify.playback", message="Initializing playback state")
         self.playing_first_track = False
         self.queued_tracks = []
         self.clear_playback_context()
 
-        self._print_variables()
-
-    def _print_variables(self, return_value=None):
-        """print()
-        print(f"self.playing_first_track: {self.playing_first_track}")
-        print(f"self.queued_tracks: {self.queued_tracks}")
-        print(return_value)
-        print()"""
-        pass
-
     def _select_playback_device(self) -> str:
         try:
             devices = self.spotify.devices()['devices']
-            logger.debug(f"Available devices: {devices}")
+            logger.debug("spotify.devices", 
+                        message="Retrieved available devices",
+                        data={"devices": devices})
 
             if not devices:
+                logger.error("spotify.devices.error",
+                           message="No Spotify devices found")
                 raise ValueError("No available Spotify devices found.")
 
             print("\n==[ Available Spotify Devices ]==\n")
@@ -111,255 +115,175 @@ class AutoDJ:
                 try:
                     selection = int(input("\nChoose playback device number: "))
                     device = devices[selection - 1]
-                    logger.info(f"Selected device: {device['name']} ({device['id']})")
+                    logger.info("spotify.device.selected",
+                              message="Device selected",
+                              data={
+                                  "name": device['name'],
+                                  "id": device['id']
+                              })
                     return device['id']
                 except KeyboardInterrupt:
-                    logger.info("User cancelled device selection.")
+                    logger.info("spotify.device.cancel",
+                              message="User cancelled device selection")
                     raise
                 except (ValueError, IndexError):
+                    logger.error("spotify.device.error",
+                               message="Invalid device selection")
                     print("Invalid selection. Please try again.")
                     sys.exit()
 
-        except Exception as e:
-            logger.exception("Failed to select playback device", exc_info=e)
+        except Exception as exc:
+            logger.exception("spotify.device.error", exc=exc,
+                           message="Failed to select playback device")
             raise
 
     def find_song(self, song_info):
         """Search Spotify for a specific song."""
         try:
-            find_song_query = f"{song_info['artist']} {song_info['song']}"
-            logger.debug(f'find_song_query: {find_song_query}')
-            results = self.spotify.search(q=find_song_query, type='track')#, limit=1)
-            logger.debug(f'results: {results}')
+            query = f"{song_info['artist']} {song_info['song']}"
+            logger.debug("spotify.search",
+                        message="Searching for song",
+                        data={"query": query})
+            
+            results = self.spotify.search(q=query, type='track')
+            logger.debug("spotify.search.result",
+                        data={"results": results})
             return results
-        except SpotifyException as e:
-            logger.exception("Failed to find song", exc_info=e)
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.search.error", exc=exc,
+                           message="Failed to find song")
             return None
 
     def add_song_to_queue(self, track_uri: str) -> bool:
         try:
-            logger.debug("Adding track to internal queue.")
+            logger.debug("spotify.queue.add",
+                        message="Adding track to queue",
+                        data={"track_uri": track_uri})
+            
             self.queued_tracks.append(track_uri)
 
             if not self.playback_active() and len(self.queued_tracks) == 1:
+                logger.info("spotify.playback.start",
+                          message="Starting playback of first track")
                 self.playing_first_track = True
-                
-                """logger.info("Starting playback.")
-                self.spotify.start_playback(device_id=self.playback_device, uris=[track_uri])
-                logger.info("Started playback. Checking if current song matches request.")
-                currently_playing = self.spotify.currently_playing()['item']['uri']
-                if currently_playing != track_uri:
-                    logger.info(f"Currently track does not match request: {currently_playing}. Skipping.")
-                    self.skip_song()
 
-                self._print_variables(True)
-
-                return True"""
-            
-            # logger.debug(f"track_uri: {track_uri}")
-
-            # if not self.playing_first_track:
-            #     logger.info("Adding track to Spotify queue.")
-            #     self.spotify.add_to_queue(track_uri, device_id=self.playback_device)
-
-            logger.debug(f"queued_tracks: {self.queued_tracks}")
-
-            self._print_variables(True)
+            logger.debug("spotify.queue.status",
+                        data={"queued_tracks": self.queued_tracks})
             return True
 
-        except SpotifyException as e:
-            logger.exception("Failed to add song to queue", exc_info=e)
+        except SpotifyException as exc:
+            logger.exception("spotify.queue.error", exc=exc,
+                           message="Failed to add song to queue")
             return False
 
     def check_queue_status(self) -> bool:
         try:
-            # logger.debug(f"self.queued_tracks: {self.queued_tracks}")
-
             if not self.playback_active():
                 if len(self.queued_tracks) > 0:
-                    logger.info("Queue populated but playback is not active. Starting playback.")
-                    popped_track = self.queued_tracks.pop(0)
-                    logger.debug(f"popped_track: {popped_track}")
-                    self.spotify.start_playback(device_id=self.playback_device, uris=[popped_track])
-                    logger.debug("Clearing playing_first_track flag.")
+                    logger.info("spotify.queue.resume",
+                              message="Resuming playback from queue")
+                    
+                    track = self.queued_tracks.pop(0)
+                    logger.debug("spotify.playback.track",
+                               data={"track": track})
+                    
+                    self.spotify.start_playback(
+                        device_id=self.playback_device,
+                        uris=[track]
+                    )
+                    
                     self.playing_first_track = False
-                    self._print_variables(True)
                     return True
                 
-                # logger.debug("No active playback and queue is empty.")
-
-                self._print_variables(False)
                 return False
-
-            # playback = self.spotify.current_playback()
-            # logger.debug(f"playback: {playback}")
-
-            # if not playback or not playback['is_playing']:
-                """if self.playing_first_track:
-                    logger.info("Finished playing queued track.")
-                    self.queued_tracks.pop(0)
-                    self.playing_first_track = False"""
-
-                #if not self.queued_tracks:
-                """logger.info("Playback ended and queue is empty.")
-                self.clear_playback_context()
-                logger.debug("Setting queue to inactive.")
-                self.queue_active = False
-                self._print_variables(True)
-                return True"""
-                # else:
-                #     logger.info("Playback ended, but queue is not empty. Starting next track.")
-                #     self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks[0]])
-
-            # elif playback['item']:
-
-            # if self.playing_first_track:
-            #     logger.info("Beginning playback of first queued track.")
-            #     self.spotify.start_playback(device_id=self.playback_device, uris=[self.queued_tracks.pop(0)])
-            #     logger.debug("Clearing playing_first_track flag.")
-            #     self.playing_first_track = False
-            """else:
-                playback = self.spotify.current_playback()
-                logger.debug(f"playback: {playback}")
-                current_track = playback['item']['uri']
-                logger.debug(f"current_track: {current_track}")
-
-                logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
-                if self.playing_first_track and current_track != self.queued_tracks[0]:
-                    logger.info("Finished playing queued track.")
-                    self.queued_tracks.pop(0)
-                    self.playing_first_track = False
-                elif not self.playing_first_track and self.queued_tracks and current_track == self.queued_tracks[0]:
-                    logger.info(f"Now playing queued track: {current_track}")
-                    self.playing_first_track = True
-                    # self.queued_tracks.pop(0)
-                elif not self.queued_tracks:
-                    logger.info("Playing non-queued track, clearing context.")
-                    self.clear_playback_context()
-                    return True
-                else:
-                    logger.info("Playing unexpected track, skipping.")
-                    self.skip_song()
-
-            else:
-                logger.warning("Unknown playback state.")"""
             
             if self.queued_tracks:
-                # Check if the current track is the first track in the queue
-                logger.debug(f"self.queued_tracks[0]: {self.queued_tracks[0]}")
-                if (current_track := self.spotify.current_playback()['item']['uri']) == self.queued_tracks[0]:
-                    logger.info(f"Now playing queued track: {current_track}")
+                current_track = self.spotify.current_playback()['item']['uri']
+                logger.debug("spotify.playback.status",
+                           data={
+                               "current_track": current_track,
+                               "next_in_queue": self.queued_tracks[0]
+                           })
+                
+                if current_track == self.queued_tracks[0]:
+                    logger.info("spotify.playback.track",
+                              message="Now playing queued track",
+                              data={"track": current_track})
                     self.queued_tracks.pop(0)
-            
-            self._print_variables(True)
+                    
             return True
-
-        except SpotifyException as e:
-            logger.exception("Failed to check queue status", exc_info=e)
+            
+        except Exception as exc:
+            logger.exception("spotify.queue.error", exc=exc,
+                           message="Failed to check queue status")
             return False
 
     def clear_playback_context(self):
         try:
-            logger.info("Clearing playback context.")
-            if self.playback_active():
-                self.spotify.pause_playback(device_id=self.playback_device)
-            previous_track = None
-            attempts = 0
-            max_attempts = 5
-
-            while True:
-                # Get the current queue
-                queue = self.spotify.queue()
-                
-                # If the queue is empty, we're done
-                if len(queue['queue']) == 0:
-                    print("Queue is now empty")
-                    break
-                
-                # Check if we're stuck on the same track
-                current_track = queue['queue'][0]['uri']
-                if current_track == previous_track:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        print("Unable to clear the last track. Stopping.")
-                        break
-                else:
-                    attempts = 0
-
-                # Skip to the next track
-                try:
-                    self.spotify.next_track()
-                    print(f"Skipped track: {queue['queue'][0]['name']}")
-                    # Wait a short time to allow the API to update
-                    time.sleep(1)
-                except SpotifyException as e:
-                    logger.error(f"Error skipping track: {e}")
-                    break
-
-                previous_track = current_track
-
-            # After clearing the queue, pause playback
-            try:
-                self.spotify.pause_playback()
-                logger.info("Playback paused.")
-            except SpotifyException as e:
-                logger.error(f"Error pausing playback: {e}")
-            
+            logger.info("spotify.playback.clear",
+                       message="Clearing playback context")
+            self.spotify.pause_playback(device_id=self.playback_device)
+            self.queued_tracks = []
             self.playing_first_track = False
-            self.queued_tracks.clear()
-
-            self._print_variables(True)
             return True
-        
-        except SpotifyException as e:
-            logger.exception("Failed to clear playback context.", exc_info=e)
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.playback.error", exc=exc,
+                           message="Failed to clear playback context")
             return False
 
     def get_user_market(self):
         try:
             user_info = self.spotify.me()
-            logger.debug(f"user_info: {user_info}")
-            return user_info['country']
-        except SpotifyException as e:
-            logger.exception("Failed to get user market.", exc_info=e)
+            logger.debug("spotify.user.market",
+                        data={"user_info": user_info})
+            return user_info.get('country')
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.user.error", exc=exc,
+                           message="Failed to get user market")
+            return None
 
     def get_song_markets(self, track_uri):
         try:
-            if track_info := self.spotify.track(track_uri):
-                logger.debug(f"track_info: {track_info}")
-                return track_info['available_markets']
+            track_info = self.spotify.track(track_uri)
+            logger.debug("spotify.track.markets",
+                        data={"track_info": track_info})
+            return track_info.get('available_markets', [])
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.track.error", exc=exc,
+                           message="Failed to get track markets")
             return []
-        except SpotifyException as e:
-            logger.exception("Failed to get song markets.", exc_info=e)
 
     def playback_active(self) -> bool:
-        """
-        Check if there's active playback on the user's Spotify account.
-        
-        Returns:
-            bool: True if there's active playback, False otherwise.
-        """
         try:
-            # playback_state = self.spotify.current_playback()
-            if (playback_state := self.spotify.current_playback()) and playback_state['is_playing']:
-                logger.debug("Playback is active.")
+            playback = self.spotify.current_playback()
+            if playback and playback['is_playing']:
+                logger.debug("spotify.playback.active",
+                           message="Playback is active")
                 return True
-            else:
-                # logger.debug("No active playback.")
-                return False
-        except SpotifyException as e:
-            logger.exception("Error checking playback state.", exc_info=e)
+                
+            logger.info("spotify.playback.inactive",
+                       message="Playback is not active")
+            return False
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.playback.error", exc=exc,
+                           message="Failed to check playback status")
             return False
 
     def skip_song(self):
         try:
-            if not self.playback_active():
-                logger.info("Playback is not active.")
-                return True
+            logger.info("spotify.playback.skip",
+                       message="Skipping current track")
             self.spotify.next_track(device_id=self.playback_device)
             return True
-        except SpotifyException as e:
-            logger.exception("Failed to skip song.", exc_info=e)
+            
+        except SpotifyException as exc:
+            logger.exception("spotify.playback.error", exc=exc,
+                           message="Failed to skip track")
             return False
 
 if __name__ == "__main__":

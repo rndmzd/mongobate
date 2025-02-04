@@ -7,9 +7,9 @@ from helpers.actions import Actions
 from helpers.checks import Checks
 from helpers.cbevents import CBEvents
 from helpers.commands import Commands
-from utils.logging_config import setup_logging
+from utils.logging_config import setup_basic_logging
 
-logger = setup_logging(component='helpers')
+logger = setup_basic_logging(component='helpers')
 
 config_path = Path(__file__).parent.parent / 'config.ini'
 

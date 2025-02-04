@@ -6,9 +6,9 @@ import time
 
 from utils import MongoJSONEncoder
 from chataudio.audioplayer import AudioPlayer
-from utils.logging_config import setup_logging
+from utils.structured_logging import get_structured_logger
 
-logger = setup_logging(component='helpers.cbevents')
+logger = get_structured_logger('mongobate.helpers.cbevents')
 
 
 class CBEvents:
@@ -19,7 +19,8 @@ class CBEvents:
         self.checks = Checks()
 
         self.active_components = self.checks.get_active_components()
-        logger.info(f"Active Components: {self.active_components}")
+        logger.info("component.init", message="Initializing CBEvents", 
+                   data={"active_components": self.active_components})
 
         actions_args = {}
         if 'chat_auto_dj' in self.active_components:
@@ -27,7 +28,8 @@ class CBEvents:
         if 'vip_audio' in self.active_components:
             actions_args['vip_audio'] = True
             self.vip_audio_cooldown_seconds = config.getint("General", "vip_audio_cooldown_hours") * 60 * 60
-            logger.debug(f"self.vip_audio_cooldown_seconds: {self.vip_audio_cooldown_seconds}")
+            logger.debug("component.init", message="Setting VIP audio cooldown", 
+                        data={"cooldown_seconds": self.vip_audio_cooldown_seconds})
             self.vip_cooldown = {}
             self.vip_audio_directory = config.get("General", "vip_audio_directory")
         if 'command_parser' in self.active_components:
@@ -50,50 +52,50 @@ class CBEvents:
 
     def process_event(self, event, privileged_users):
         try:
-            print(json.dumps(event, sort_keys=True, indent=4, cls=MongoJSONEncoder))
-
-            event_method = event["method"]
-            logger.debug(f"event_method: {event_method}")
-            event_object = event["object"]
-            logger.debug(f"event_object: {event_object}")
-
-            vip_users = privileged_users["vip"]
-            admin_users = privileged_users["admin"]
-            action_users = privileged_users["custom_actions"]
-
-            if event_method == "tip":
-                process_result = self.tip(event_object)
-            elif event_method == "broadcastStart":
-                process_result = self.broadcast_start(event_object)
-            elif event_method == "broadcastStop":
-                process_result = self.broadcast_stop(event_object)
-            elif event_method == "fanclubJoin":
-                process_result = self.fanclub_join(event_object)
-            elif  event_method == "privateMessage":
-                process_result = self.private_message(event_object, admin_users, action_users)
-            elif event_method == "roomSubjectChange":
-                process_result = self.room_subject_change(event_object)
-            elif event_method == "userEnter":
-                process_result = self.user_enter(event_object, vip_users)
-            elif event_method == "userLeave":
-                process_result = self.user_leave(event_object)
-            elif event_method == "follow":
-                process_result = self.follow(event_object)
-            elif event_method == "unfollow":
-                process_result = self.unfollow(event_object)
-            elif event_method == "mediaPurchase":
-                process_result = self.media_purchase(event_object)
-            elif event_method == "chatMessage":
-                process_result = self.chat_message(event_object, admin_users, action_users)
-            else:
-                logger.warning(f"Unknown event method: {event_method}")
-                process_result = False
-
-        except Exception as e:
-            logger.exception("Error processing event", exc_info=e)
-            process_result = False
-        
-        return process_result
+            event_method = event.get('method')
+            event_object = event.get('object')
+            
+            if not event_method:
+                logger.warning("event.process.error", message="No event method found")
+                return False
+                
+            # Map event methods to handler methods
+            method_map = {
+                'chatMessage': lambda obj: self.chat_message(obj, privileged_users.get('admin_users', []), privileged_users.get('action_users', {})),
+                'privateMessage': lambda obj: self.private_message(obj, privileged_users.get('admin_users', []), privileged_users.get('action_users', {})),
+                'tip': lambda obj: self.tip(obj),
+                'broadcastStart': lambda obj: self.broadcast_start(obj),
+                'broadcastStop': lambda obj: self.broadcast_stop(obj),
+                'fanclubJoin': lambda obj: self.fanclub_join(obj),
+                'userEnter': lambda obj: self.user_enter(obj, privileged_users.get('vip_users', {})),
+                'userLeave': lambda obj: self.user_leave(obj),
+                'follow': lambda obj: self.follow(obj),
+                'unfollow': lambda obj: self.unfollow(obj),
+                'mediaPurchase': lambda obj: self.media_purchase(obj),
+                'roomSubjectChange': lambda obj: self.room_subject_change(obj)
+            }
+            
+            # Convert method name to handler method name
+            handler = method_map.get(event_method)
+            if not handler:
+                logger.warning("event.process.error", 
+                             message="No processor found for method",
+                             data={"method": event_method})
+                return False
+                
+            logger.debug("event.process", message="Processing event", 
+                        data={
+                            "method": event_method,
+                            "object": event_object
+                        })
+                
+            process_result = handler(event_object)
+            return process_result
+            
+        except Exception as exc:
+            logger.exception("event.process.error", exc=exc, 
+                           message="Error processing event")
+            return False
 
     def tip(self, event):
         """
@@ -115,52 +117,74 @@ class CBEvents:
         }
         """
         try:
-            # Process tip event
-            logger.info("Tip event received.")
-                
-            ## Chat Auto DJ ##
+            logger.info("event.tip", message="Tip event received")
+            
+            # Extract tip amount once for all checks
+            tip_amount = event.get('tip', {}).get('tokens', 0)
+            
             if 'chat_auto_dj' in self.active_components:
-                ## Perform checks for tip event items ##
-                logger.info("Checking if skip song request.")
-                if self.checks.is_skip_song_request(event["tip"]["tokens"]):
-                    logger.info("Skip song request detected. Checking current playback state.")
-                    if self.actions.get_playback_state():
-                        logger.info("Playback active. Executing skip song.")
+                logger.info("event.tip.song", message="Checking if skip song request")
+                
+                if self.checks.is_skip_song_request(tip_amount):
+                    logger.info("event.tip.song.skip", message="Skip song request detected")
+                    
+                    if self.actions.is_playback_active():
+                        logger.info("event.tip.song.skip", message="Executing skip song")
                         skip_song_result = self.actions.skip_song()
-                        logger.debug(f'skip_song_result: {skip_song_result}')
-
-                logger.info("Checking if song request.")
-                if self.checks.is_song_request(event["tip"]["tokens"]):
-                    logger.info("Song request detected.")
-                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
-                    logger.info(f"Request count: {request_count}")
-                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
-                    logger.debug(f'song_extracts:  {song_extracts}')
-                    for song_info in song_extracts:
-                        song_uri = self.actions.find_song_spotify(song_info)
-                        logger.debug(f'song_uri: {song_uri}')
-                        if song_uri:
-                            if not self.actions.available_in_market(song_uri):
-                                logger.warning(f"Song not available in user market: {song_info}")
-                                continue
-                            song_details = f"{song_info['artist']} - {song_info['song']}"
-                            add_queue_result = self.actions.add_song_to_queue(song_uri, event["user"]["username"], song_details)
-                            logger.debug(f'add_queue_result: {add_queue_result}')
-                            if not add_queue_result:
-                                logger.error(f"Failed to add song to queue: {song_info}")
-                            else:
-                                logger.info(f"Song added to queue: {song_info}")
-
+                        logger.debug("event.tip.song.skip", data={"result": skip_song_result})
+                
+                logger.info("event.tip.song", message="Checking if song request")
+                
+                if self.checks.is_song_request(tip_amount):
+                    logger.info("event.tip.song.request", message="Song request detected")
+                    
+                    request_count = self.checks.get_request_count(tip_amount)
+                    logger.info("event.tip.song.request", 
+                              message="Processing song request",
+                              data={"request_count": request_count})
+                    
+                    song_extracts = self.actions.extract_song_titles(event.get('tip', {}).get('message', ''), request_count)
+                    logger.debug("event.tip.song.request", data={"song_extracts": song_extracts})
+                    
+                    song_uri = self.actions.find_song_spotify(song_extracts[0] if song_extracts else None)
+                    logger.debug("event.tip.song.request", data={"song_uri": song_uri})
+                    
+                    if not self.actions.available_in_market(song_uri):
+                        logger.warning("event.tip.song.error", 
+                                     message="Song not available in user market",
+                                     data={"song_info": song_extracts})
+                        return True
+                    
+                    # Get requester name from the event
+                    requester_name = event.get('user', {}).get('username', 'Anonymous')
+                    # Get song details from the first extracted song
+                    song_details = f"{song_extracts[0]['artist']} - {song_extracts[0]['song']}" if song_extracts else "Unknown Song"
+                    
+                    add_queue_result = self.actions.add_song_to_queue(song_uri, requester_name, song_details)
+                    logger.debug("event.tip.song.queue", data={"result": add_queue_result})
+                    
+                    if not add_queue_result:
+                        logger.error("event.tip.song.error",
+                                   message="Failed to add song to queue",
+                                   data={"song_info": song_extracts})
+                    else:
+                        logger.info("event.tip.song.queue",
+                                  message="Song added to queue",
+                                  data={"song_info": song_extracts})
+            
             if 'spray_bottle' in self.active_components:
-                logger.info("Checking if spray bottle tip.")
-                if self.checks.is_spray_bottle_tip(event["tip"]["tokens"]):
-                    logger.info("Spray bottle tip detected.")
-                    spray_bottle_result = self.actions.trigger_spray()
-                    logger.debug(f'spray_bottle_result: {spray_bottle_result}')
-                        
+                logger.info("event.tip.spray", message="Checking if spray bottle tip")
+                
+                if self.checks.is_spray_bottle_tip(tip_amount):
+                    logger.info("event.tip.spray", message="Spray bottle tip detected")
+                    spray_bottle_result = self.actions.trigger_spray_bottle()
+                    logger.debug("event.tip.spray", data={"result": spray_bottle_result})
+            
             return True
-        except Exception as e:
-            logger.exception("Error processing tip event", exc_info=e)
+            
+        except Exception as exc:
+            logger.exception("event.tip.error", exc=exc,
+                           message="Error processing tip event")
             return False
     
     def broadcast_start(self, event):
@@ -178,16 +202,11 @@ class CBEvents:
         }
         """
         try:
-            # Process broadcast start event
-            logger.info("Broadcast start event received.")
-            
-            if 'obs_integration' in self.active_components:
-                # Switch to the main broadcast scene
-                self.actions.set_scene('main')
-                
+            logger.info("event.broadcast.start", message="Broadcast start event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing broadcast start event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.broadcast.error", exc=exc,
+                           message="Error processing broadcast start event")
             return False
     
     def broadcast_stop(self, event):
@@ -205,16 +224,11 @@ class CBEvents:
         }
         """
         try:
-            # Process broadcast stop event
-            logger.info("Broadcast stop event received.")
-            
-            if 'obs_integration' in self.active_components:
-                # Switch to the offline scene
-                self.actions.set_scene('offline')
-                
+            logger.info("event.broadcast.stop", message="Broadcast stop event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing broadcast stop event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.broadcast.error", exc=exc,
+                           message="Error processing broadcast stop event")
             return False
     
     def fanclub_join(self, event):
@@ -232,13 +246,13 @@ class CBEvents:
         }
         """
         try:
-            # Process fanclub join event
-            logger.info("Fanclub join event received.")
+            logger.info("event.fanclub.join", message="Fanclub join event received")
             if 'event_audio' in self.active_components:
                 self.audio_player.play_audio(self.fanclub_join_audio_path)
             return True
-        except Exception as e:
-            logger.exception("Error processing fanclub join event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.fanclub.error", exc=exc,
+                           message="Error processing fanclub join event")
             return False
     
     def private_message(self, event, admin_users, action_users):
@@ -269,27 +283,48 @@ class CBEvents:
             
             if 'command_parser' in self.active_components:
                 if event["user"]["username"] in admin_users:
-                    logger.info(f"Admin message: {event['message']['message']}")
+                    logger.info("event.chat.admin", 
+                              message="Admin message received",
+                              data={
+                                  "username": event["user"]["username"],
+                                  "message": event['message']['message']
+                              })
                     command = self.checks.get_command(event["message"]["message"])
                     if command:
-                        logger.info("Trying command: {command}")
+                        logger.info("event.command.process", 
+                                  message="Processing admin command",
+                                  data={"command": command})
                         command_result = self.commands.try_command(command)
-                        logger.debug(f"command_result: {command_result}")
+                        logger.debug("event.command.result",
+                                   data={"result": command_result})
 
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():
+                    logger.info("event.chat.action", 
+                              message="Action user message received",
+                              data={"username": username})
                     logger.info(f"Message from action user {username}.")
                     action_messages = action_users[username]
                     message = event['message']['message'].strip()
                     for action_message in action_messages.keys():
                         if action_message in message:
+                            logger.info("event.action.trigger",
+                                      message="Action message matched",
+                                      data={"username": username})
                             logger.info(f"Message matches action message for user {username}. Executing action.")
                             audio_file = action_messages[message]
-                            logger.debug(f"audio_file: {audio_file}")
+                            logger.debug("event.action.audio",
+                                       data={"audio_file": audio_file})
                             audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                            logger.debug(f"audio_file_path: {audio_file_path}")
-                            logger.info(f"Playing custom action audio for user: {username}")
+                            logger.debug("event.action.audio",
+                                       data={"audio_file_path": audio_file_path})
+                            logger.info("event.action.audio.play",
+                                      message="Playing action audio",
+                                      data={
+                                          "username": username,
+                                          "audio_file": audio_file
+                                      })
                             self.audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
@@ -326,28 +361,44 @@ class CBEvents:
         }
         """
         try:
-            # Process user enter event
-            logger.info("User enter event received.")
-
+            logger.info("event.user.enter", message="User enter event received")
+            
             if 'vip_audio' in self.active_components:
                 username = event['user']['username']
-                if username in vip_users.keys():
-                    logger.info(f"VIP user {username} entered the room.")
+                
+                if username in vip_users:
+                    logger.info("event.user.enter.vip", 
+                              message="VIP user entered",
+                              data={"username": username})
+                    
                     current_time = time.time()
-                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_audio_cooldown_seconds:
-                        logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
+                    last_entry = self.vip_cooldown.get(username, 0)
+                    
+                    if current_time - last_entry > self.vip_audio_cooldown_seconds:
+                        logger.info("event.user.enter.vip.audio",
+                                  message="Playing VIP audio",
+                                  data={"username": username})
+                        
                         audio_file = vip_users[username]
-                        logger.debug(f"audio_file: {audio_file}")
+                        logger.debug("event.user.enter.vip.audio",
+                                   data={"audio_file": audio_file})
+                        
                         audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                        logger.debug(f"audio_file_path: {audio_file_path}")
-                        logger.info(f"Playing VIP audio for user: {username}")
+                        logger.debug("event.user.enter.vip.audio",
+                                   data={"audio_file_path": audio_file_path})
+                        
                         self.audio_player.play_audio(audio_file_path)
-                        logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
+                        logger.info("event.user.enter.vip.audio",
+                                  message="VIP audio played, resetting cooldown",
+                                  data={"username": username})
+                        
                         self.vip_cooldown[username] = current_time
-                            
+            
             return True
-        except Exception as e:
-            logger.exception("Error processing user enter event", exc_info=e)
+            
+        except Exception as exc:
+            logger.exception("event.user.enter.error", exc=exc,
+                           message="Error processing user enter event")
             return False
     
     def user_leave(self, event):
@@ -365,11 +416,11 @@ class CBEvents:
         }
         """
         try:
-            # Process user leave event
-            logger.info("User leave event received.")
+            logger.info("event.user.leave", message="User leave event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing user leave event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.user.leave.error", exc=exc,
+                           message="Error processing user leave event")
             return False
     
     def follow(self, event):
@@ -387,11 +438,11 @@ class CBEvents:
         }
         """
         try:
-            # Process follow event
-            logger.info("Follow event received.")
+            logger.info("event.follow", message="Follow event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing follow event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.follow.error", exc=exc,
+                           message="Error processing follow event")
             return False
 
     def unfollow(self, event):
@@ -409,11 +460,11 @@ class CBEvents:
         }
         """
         try:
-            # Process unfollow event
-            logger.info("Unfollow event received.")
+            logger.info("event.unfollow", message="Unfollow event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing unfollow event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.unfollow.error", exc=exc,
+                           message="Error processing unfollow event")
             return False
 
     def media_purchase(self, event):
@@ -437,11 +488,11 @@ class CBEvents:
         }
         """
         try:
-            # Process media purchase event
-            logger.info("Media purchase event received.")
+            logger.info("event.media.purchase", message="Media purchase event received")
             return True
-        except Exception as e:
-            logger.exception("Error processing media purchase event", exc_info=e)
+        except Exception as exc:
+            logger.exception("event.media.purchase.error", exc=exc,
+                           message="Error processing media purchase event")
             return False
 
     def chat_message(self, event, admin_users, action_users):
@@ -466,31 +517,54 @@ class CBEvents:
         """
         try:
             # Process chat message event
-            logger.info("Chat message event received.")
-
-            if 'command_parser' in self.active_components:
-                if event["user"]["username"] in admin_users:
-                    logger.info(f"Admin message: {event['message']['message']}")
-                    command = self.checks.get_command(event["message"]["message"])
-                    if command:
-                        logger.info("Trying command: {command}")
-                        command_result = self.commands.try_command(command)
-                        logger.debug(f"command_result: {command_result}")
-            if 'custom_actions' in self.active_components:
-                username = event['user']['username']
-                if username in action_users.keys():
-                    logger.info(f"Message from action user {username}.")
-                    action_messages = action_users[username]
-                    message = event['message']['message'].strip()
-                    for action_message in action_messages.keys():
-                        if action_message in message:
-                            logger.info(f"Message matches action message for user {username}. Executing action.")
-                            audio_file = action_messages[action_message]
-                            logger.debug(f"audio_file: {audio_file}")
-                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                            logger.debug(f"audio_file_path: {audio_file_path}")
-                            logger.info(f"Playing custom action audio for user: {username}")
-                            self.audio_player.play_audio(audio_file_path)
+            logger.info("event.chat.message", message="Chat message event received")
+            username = event['user']['username']
+            
+            if username in admin_users:
+                logger.info("event.chat.admin", 
+                          message="Admin message received",
+                          data={
+                              "username": username,
+                              "message": event['message']['message']
+                          })
+                
+                # Process admin commands
+                command = self.checks.get_command(event['message']['message'])
+                if command:
+                    logger.info("event.command.process", 
+                              message="Processing admin command",
+                              data={"command": command})
+                    command_result = self.commands.try_command(command)
+                    logger.debug("event.command.result",
+                               data={"result": command_result})
+            
+            elif username in action_users.keys():
+                logger.info("event.chat.action", 
+                          message="Action user message received",
+                          data={"username": username})
+                
+                # Process action user messages
+                if self._matches_action_message(event['message']['message'], username):
+                    logger.info("event.action.trigger",
+                              message="Action message matched",
+                              data={"username": username})
+                    
+                    audio_file = action_users[username]
+                    logger.debug("event.action.audio",
+                               data={"audio_file": audio_file})
+                    
+                    audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                    logger.debug("event.action.audio",
+                               data={"audio_file_path": audio_file_path})
+                    
+                    logger.info("event.action.audio.play",
+                              message="Playing action audio",
+                              data={
+                                  "username": username,
+                                  "audio_file": audio_file
+                              })
+                    self.audio_player.play_audio(audio_file_path)
+            
             return True
         except Exception as e:
             logger.exception("Error processing chat message event", exc_info=e)

@@ -202,9 +202,20 @@ class EventHandler:
             time.sleep(1)
 
     def song_queue_check(self):
+        """Continuously check the song queue status."""
         while not self._stop_event.is_set():
             self.cb_events.actions.auto_dj.check_queue_status()
             time.sleep(5)
+        # One final check in silent mode during shutdown
+        try:
+            auto_dj = self.cb_events.actions.auto_dj
+            # Check queue status silently
+            auto_dj.check_queue_status(silent=True)
+            # If there are any remaining tracks, clear them silently
+            if auto_dj.queued_tracks:
+                auto_dj.clear_playback_context(silent=True)
+        except Exception:
+            pass  # Ignore any errors during shutdown
 
     def event_processor(self):
         """Continuously process events from the event queue."""
@@ -292,30 +303,38 @@ class EventHandler:
             )
             self.song_queue_check_thread.start()
 
-    def stop(self):
-        logger.info("handler.stop",
-                   message="Stopping event handler")
+    async def stop(self):
+        """Stop the event handler and cleanup resources."""
+        # Set stop event first to signal all threads to stop
         self._stop_event.set()
         
-        for thread in [self.watcher_thread, self.event_thread, self.privileged_user_refresh_thread]:
-            if thread.is_alive():
-                logger.debug("thread.stop",
-                           message="Stopping thread",
-                           data={"thread": thread.name})
-                thread.join()
-                
-        logger.debug("mongodb.check",
-                    message="Checking MongoDB connection")
-        self.cleanup()
+        # Stop all threads
+        threads = [
+            self.watcher_thread,
+            self.event_thread,
+            self.privileged_user_refresh_thread
+        ]
+        
+        if hasattr(self, 'song_queue_check_thread'):
+            threads.append(self.song_queue_check_thread)
+        
+        # Then stop each thread with a timeout
+        for thread in threads:
+            if thread and thread.is_alive():
+                thread.join(timeout=5)  # Give each thread 5 seconds to stop
 
-    def cleanup(self):
+        # Clean up MongoDB connection
         if self.mongo_client:
-            logger.info("mongodb.cleanup",
-                       message="Closing MongoDB connection")
             self.mongo_client.close()
 
-        logger.info("handler.cleanup",
-                   message="Cleanup complete")
+        # Stop any active Spotify playback silently
+        if hasattr(self, 'cb_events') and hasattr(self.cb_events, 'actions'):
+            if hasattr(self.cb_events.actions, 'auto_dj'):
+                try:
+                    self.cb_events.actions.auto_dj.clear_playback_context(silent=True)
+                except Exception:
+                    # Ignore Spotify errors during shutdown
+                    pass
 
 if __name__ == "__main__":
     import configparser

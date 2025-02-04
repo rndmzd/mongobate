@@ -313,14 +313,31 @@ class AsyncElasticsearchHandler(logging.Handler):
         self._thread_workers.add(worker_task)
         worker_task.add_done_callback(lambda t: self._thread_workers.remove(t))
 
-    async def close(self):
-        """Override the synchronous close method to handle async cleanup."""
+    def close(self):
+        """Synchronous close method that Python's logging system expects."""
+        if not self._closed:
+            self._closed = True
+            self._initialized = False
+            self._stop_event.set()
+            
+            # Close Elasticsearch client if it exists
+            if self.es_client:
+                self.es_client = None
+            
+            # Clear any remaining items in queue
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except:
+                    break
+
+    async def aclose(self):
+        """Async close method for proper cleanup."""
+        if self._closed or not self._initialized:
+            return
+            
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self._async_close())
-            else:
-                loop.run_until_complete(self._async_close())
+            await self._async_close()
         except Exception as e:
             print(f"Error during handler close: {e}", file=sys.stderr)
 
@@ -331,27 +348,24 @@ class AsyncElasticsearchHandler(logging.Handler):
             
         self._closed = True
         self._stop_event.set()
+        self._initialized = False  # Stop accepting new logs immediately
         
         try:
-            # Wait for thread workers to complete
-            if self._thread_workers:
-                await asyncio.gather(*self._thread_workers, return_exceptions=True)
-            
-            # Wait for main worker
+            # Cancel worker task first
             if self._worker_task:
+                self._worker_task.cancel()
                 try:
-                    # Process remaining items in queue
-                    while not self._queue.empty():
-                        try:
-                            await asyncio.wait_for(self._process_queue(), timeout=1.0)
-                        except asyncio.TimeoutError:
-                            break
-                        
-                    await asyncio.wait_for(self._worker_task, timeout=5.0)
-                except asyncio.TimeoutError:
-                    print("Timeout waiting for Elasticsearch worker to complete", file=sys.stderr)
-                except Exception as e:
-                    print(f"Error waiting for worker task: {str(e)}", file=sys.stderr)
+                    await self._worker_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                self._worker_task = None
+            
+            # Clear any remaining items in queue
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
             
             # Close Elasticsearch client
             if self.es_client:
@@ -362,18 +376,19 @@ class AsyncElasticsearchHandler(logging.Handler):
                 finally:
                     self.es_client = None
             
-            # Close HTTP session
-            if self._http_session and not self._http_session.closed:
-                try:
-                    await self._http_session.close()
-                except Exception as e:
-                    print(f"Error closing HTTP session: {str(e)}", file=sys.stderr)
-                finally:
-                    self._http_session = None
+            # Close HTTP session last
+            if self._http_session:
+                if not self._http_session.closed:
+                    try:
+                        await self._http_session.close()
+                    except Exception as e:
+                        print(f"Error closing HTTP session: {str(e)}", file=sys.stderr)
+                self._http_session = None
                     
         except Exception as e:
             print(f"Error during async close: {str(e)}", file=sys.stderr)
         finally:
+            self._closed = True
             self._initialized = False
 
     async def _process_queue(self):
@@ -412,7 +427,7 @@ class AsyncElasticsearchHandler(logging.Handler):
     def __del__(self):
         """Ensure resources are cleaned up."""
         if not self._closed:
-            self.close()
+            self.close()  # Use synchronous close in __del__
 
 # Patch the close method in logging.Handler to handle coroutines
 original_handler_close = logging.Handler.close
@@ -420,11 +435,26 @@ original_handler_close = logging.Handler.close
 def patched_handler_close(self):
     """Patched close method that properly handles coroutines."""
     if hasattr(self, 'close') and asyncio.iscoroutinefunction(self.close):
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(self.close())
-        else:
-            loop.run_until_complete(self.close())
+        try:
+            # Try to get the current event loop
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # If no loop exists or it's closed, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            if loop.is_running():
+                loop.create_task(self.close())
+            else:
+                try:
+                    loop.run_until_complete(self.close())
+                finally:
+                    if loop != asyncio.get_event_loop():
+                        loop.close()
+        except Exception:
+            # If all else fails, just ignore the coroutine
+            pass
     else:
         original_handler_close(self)
 

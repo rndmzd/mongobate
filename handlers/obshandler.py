@@ -119,7 +119,7 @@ class OBSHandler:
                            data={"url": ws_url})
                 self._connected = False
                 return False
-            except simpleobsws.ConnectionFailure as exc:
+            except Exception as exc:
                 logger.error("obs.connect.error",
                            message="WebSocket connection failed",
                            data={"error": str(exc), "url": ws_url})

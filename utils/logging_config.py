@@ -183,20 +183,26 @@ async def setup_logging(logger_name='mongobate', component=None):
     return logger
 
 async def cleanup_logging():
-    """Cleanup function to properly close all logging handlers."""
-    root_logger = logging.getLogger()
-    
-    # Close all handlers
-    for handler in root_logger.handlers[:]:
-        try:
-            if isinstance(handler, AsyncElasticsearchHandler):
-                # Ensure the handler is properly closed
-                await handler.close()
-            else:
-                handler.close()
-            root_logger.removeHandler(handler)
-        except Exception as e:
-            print(f"Error closing handler {handler}: {e}")
-    
-    # Small delay to allow final logs to be processed
-    await asyncio.sleep(0.5) 
+    """Cleanup function to properly close async logging handlers."""
+    try:
+        root_logger = logging.getLogger()
+        
+        # Disable all logging first
+        logging.disable(logging.CRITICAL)
+        
+        # Close all handlers
+        for handler in root_logger.handlers[:]:
+            try:
+                if hasattr(handler, 'aclose'):
+                    await handler.aclose()
+                else:
+                    handler.close()
+                root_logger.removeHandler(handler)
+            except Exception as exc:
+                print(f"Error handling logger {handler}: {exc}")
+        
+    except Exception as exc:
+        print(f"Critical error during logging cleanup: {exc}")
+    finally:
+        # Re-enable logging
+        logging.disable(logging.NOTSET) 

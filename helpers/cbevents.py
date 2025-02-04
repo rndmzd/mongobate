@@ -335,17 +335,21 @@ class CBEvents:
                 if username in vip_users.keys():
                     logger.info(f"VIP user {username} entered the room.")
                     current_time = time.time()
-                    if username not in self.vip_cooldown or (current_time - self.vip_cooldown[username]) > self.vip_audio_cooldown_seconds:
+                    last_vip_audio_play = self.actions.get_last_vip_audio_play(username)
+                    if not last_vip_audio_play or (current_time - last_vip_audio_play) > self.vip_audio_cooldown_seconds:
                         logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
                         audio_file = vip_users[username]
                         logger.debug(f"audio_file: {audio_file}")
+
                         audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
                         logger.debug(f"audio_file_path: {audio_file_path}")
                         logger.info(f"Playing VIP audio for user: {username}")
                         self.audio_player.play_audio(audio_file_path)
                         logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
-                        self.vip_cooldown[username] = current_time
-                            
+                        if not self.actions.set_last_vip_audio_play(username, current_time):
+                            logger.error(f"Failed to set last VIP audio play time for user: {username}")
+
+
             return True
         except Exception as e:
             logger.exception("Error processing user enter event", exc_info=e)

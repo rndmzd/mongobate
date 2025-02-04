@@ -1,9 +1,12 @@
+import datetime
+from datetime import datetime as DateTime
 import logging
 from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz
 import requests
 import base64
+
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
@@ -280,3 +283,18 @@ class Actions(HTTPRequestHandler):
             logger.warning("OBS Handler is not enabled.")
             return
         self.obs.trigger_song_requester_overlay_sync(requester_name, song_details, display_duration)
+    
+    def get_last_vip_audio_play(self, user: str) -> Optional[DateTime]:
+        """Get the last VIP audio play time for a user."""
+        user_data = self.user_collection.find_one({"username": user})
+        if not user_data:
+            logger.warning(f"User {user} not found.")
+            return None
+        return user_data.get("last_vip_audio_play")
+    
+    def set_last_vip_audio_play(self, user: str, timestamp: DateTime) -> bool:
+        """Set the last VIP audio play time for a user."""
+        return self.user_collection.update_one(
+            {"username": user},
+            {"$set": {"last_vip_audio_play": timestamp}}
+        )

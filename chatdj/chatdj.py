@@ -66,6 +66,7 @@ class SongExtractor:
                     "You are a music bot that processes song requests. "
                     "Extract exactly {} song request(s) from the following message. "
                     "Return a JSON array of objects with exactly two keys: 'song' and 'artist'. "
+                    "If the user does not specify an artist, make a guess based on the song name. "
                     "Do not include any additional commentary."
                 ).format(song_count)
             },

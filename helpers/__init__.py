@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 from pymongo import MongoClient
+from spotipy import Spotify, SpotifyOAuth
 
 from helpers.actions import Actions
 from helpers.checks import Checks
@@ -29,3 +30,12 @@ mongo_db = mongo_client[os.getenv('MONGO_DATABASE', mongo_config.get('db'))]
 
 song_cache_collection = mongo_db[mongo_config.get('song_cache_collection')]
 user_collection = mongo_db[mongo_config.get('user_collection')]
+
+sp_oauth = SpotifyOAuth(
+    client_id=config.get("Spotify", "client_id"),
+    client_secret=config.get("Spotify", "client_secret"),
+    redirect_uri=config.get("Spotify", "redirect_url"),
+    scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-read-private",
+    open_browser=False
+)
+spotify_client = Spotify(auth_manager=sp_oauth)

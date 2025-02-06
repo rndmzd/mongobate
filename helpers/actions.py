@@ -62,16 +62,13 @@ class Actions(HTTPRequestHandler):
 
         if self.chatdj_enabled:
             from chatdj import SongExtractor, AutoDJ
-            from . import song_cache_collection
+            from . import spotify_client, song_cache_collection
 
-            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
-            self.auto_dj = AutoDJ(
-                config.get("Spotify", "client_id"),
-                config.get("Spotify", "client_secret"),
-                config.get("Spotify", "redirect_url")
-            )
+            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"), spotify_client)
+            self.auto_dj = AutoDJ(spotify_client)
             self.song_cache_collection = song_cache_collection
         
+
         if self.custom_actions_enabled:
             from . import user_collection
             self.user_collection = user_collection
@@ -146,7 +143,7 @@ class Actions(HTTPRequestHandler):
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
             return []
-        return self.song_extractor.extract_songs(message, song_count)
+        return self.song_extractor.extract_songs(message, song_count, self.spotify)
 
     def get_playback_state(self) -> bool:
         """Get the current playback state."""
@@ -164,9 +161,17 @@ class Actions(HTTPRequestHandler):
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
             return None
+        
+        search_result = self.auto_dj.search_track_uri(song_info['song'], song_info['artist'])
+        if search_result:
+            logger.debug(f"Search result: {search_result}")
+            song_info['spotify_uri'] = search_result
+        else:
+            logger.warning("No Spotify URI found for song.")
 
         if 'spotify_uri' in song_info and song_info['spotify_uri']:
             logger.debug("Using provided spotify_uri from song_info.")
+
             return song_info['spotify_uri']
         else:
             logger.warning("No spotify_uri provided in song request.")

@@ -18,7 +18,13 @@ class HTTPRequestHandler:
         try:
             response = requests.post(url, data=data, auth=auth)
             if response.status_code == 200:
-                logger.info(f"Success: {response.json() if response.text else 'No response body'}")
+                if response.text:
+                    try:
+                        logger.info(f"Success: {response.json()}")
+                    except ValueError:
+                        logger.info(f"Success: {response.text}")
+                else:
+                    logger.info("Success: No response body")
                 return True
             else:
                 logger.error(f"Request failed with status code: {response.status_code}")
@@ -66,6 +72,10 @@ class Actions(HTTPRequestHandler):
             )
             self.song_cache_collection = song_cache_collection
         
+        if self.custom_actions_enabled:
+            from . import user_collection
+            self.user_collection = user_collection
+
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
             logger.debug(f"self.spray_bottle_url: {self.spray_bottle_url}")
@@ -150,45 +160,16 @@ class Actions(HTTPRequestHandler):
             return False
 
     def find_song_spotify(self, song_info: Dict[str, str]) -> Optional[str]:
-        """Find a song on Spotify, using cache if available."""
+        """Return the spotify_uri provided in the song_info."""
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
             return None
 
-        cached_song = self.get_cached_song(song_info)
-        if cached_song:
-            logger.debug(f"Cache hit for {song_info}.")
-            return cached_song['optimized_results'][0]['uri']
-
-        try:
-            tracks = self.auto_dj.find_song(song_info)['tracks']
-            if not tracks or not tracks['items']:
-                logger.warning(f'No tracks found for {song_info}.')
-                return None
-
-            results = []
-            for track in tracks['items'][:20]:
-                artist_name = track['artists'][0]['name']
-                song_name = track['name']
-                score = self._custom_score(song_info['artist'], song_info['song'], artist_name, song_name)
-                results.append({
-                    'uri': track['uri'],
-                    'artist': artist_name,
-                    'song': song_name,
-                    'match_ratio': score
-                })
-
-            optimized_results = sorted(results, key=lambda x: x['match_ratio'], reverse=True)[:5]
-            logger.debug(f'Custom match results: {optimized_results}')
-
-            if self.cache_song(song_info, optimized_results):
-                logger.info(f"Cached optimized results for {song_info}.")
-            else:
-                logger.warning(f"Failed to cache optimized results for {song_info}.")
-
-            return optimized_results[0]['uri']
-        except Exception as e:
-            logger.exception(f"Error finding song on Spotify: {e}")
+        if 'spotify_uri' in song_info and song_info['spotify_uri']:
+            logger.debug("Using provided spotify_uri from song_info.")
+            return song_info['spotify_uri']
+        else:
+            logger.warning("No spotify_uri provided in song request.")
             return None
 
     def available_in_market(self, song_uri: str) -> bool:

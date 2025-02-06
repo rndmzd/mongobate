@@ -146,7 +146,6 @@ class EventHandler:
     def song_queue_check(self):
         while not self._stop_event.is_set():
             song_queue_status = self.cb_events.actions.auto_dj.check_queue_status()
-            #logger.debug(f"song_queue_status: {song_queue_status}")
             time.sleep(5)
 
     def event_processor(self):

@@ -138,8 +138,8 @@ class CBEvents:
                     song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
                     logger.debug(f'song_extracts:  {song_extracts}')
                     for song_info in song_extracts:
-                        if song_info['spotify_uri']:
-                            song_uri = song_info['spotify_uri']
+                        if song_info.spotify_uri:
+                            song_uri = song_info.spotify_uri
                         else:
                             song_uri = self.actions.find_song_spotify(song_info)
                         logger.debug(f'song_uri: {song_uri}')
@@ -147,7 +147,7 @@ class CBEvents:
                             if not self.actions.available_in_market(song_uri):
                                 logger.warning(f"Song not available in user market: {song_info}")
                                 continue
-                            song_details = f"{song_info['artist']} - {song_info['song']}"
+                            song_details = f"{song_info.artist} - {song_info.song}"
                             add_queue_result = self.actions.add_song_to_queue(song_uri, event["user"]["username"], song_details)
                             logger.debug(f'add_queue_result: {add_queue_result}')
                             if not add_queue_result:

@@ -22,8 +22,8 @@ class SongRequest(BaseModel):
 
 class SongExtractor:
     """SongExtractor using Chat Completions API to extract song/artist pairs."""
-    def __init__(self, openai_api_key: str, spotify_client: Optional[Spotify] = None):
-        openai.api_key = openai_api_key
+    def __init__(self, api_key: str, spotify_client: Optional[Spotify] = None):
+        self.openai_client = openai.OpenAI(api_key=api_key)
         self.spotify_client = spotify_client
 
     def extract_songs(self, message: str, song_count: int = 1) -> List[SongRequest]:
@@ -75,12 +75,12 @@ class SongExtractor:
             }
         ]
         try:
-            response = openai.ChatCompletion.create(
+            response = self.openai_client.chat.completions.create(
                 model="gpt-4o",  # or use gpt-3.5-turbo if desired
                 messages=messages,
                 temperature=0
             )
-            content = response.choices[0].message["content"].strip()
+            content = response.choices[0].message.content.strip()
             # Remove markdown code fences if present.
             if content.startswith("```"):
                 lines = content.splitlines()

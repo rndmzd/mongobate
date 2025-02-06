@@ -7,6 +7,8 @@ from rapidfuzz import fuzz
 import requests
 import base64
 
+from chatdj.chatdj import SongRequest
+
 
 logger = logging.getLogger('mongobate.helpers.actions')
 logger.setLevel(logging.DEBUG)
@@ -143,7 +145,7 @@ class Actions(HTTPRequestHandler):
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
             return []
-        return self.song_extractor.extract_songs(message, song_count, self.spotify)
+        return self.song_extractor.extract_songs(message, song_count)
 
     def get_playback_state(self) -> bool:
         """Get the current playback state."""
@@ -156,25 +158,19 @@ class Actions(HTTPRequestHandler):
             logger.exception("Error getting playback state", exc_info=e)
             return False
 
-    def find_song_spotify(self, song_info: Dict[str, str]) -> Optional[str]:
+    def find_song_spotify(self, song_info: SongRequest) -> Optional[str]:
         """Return the spotify_uri provided in the song_info."""
         if not self.chatdj_enabled:
             logger.warning("ChatDJ is not enabled.")
+
             return None
         
-        search_result = self.auto_dj.search_track_uri(song_info['song'], song_info['artist'])
+        search_result = self.auto_dj.search_track_uri(song_info.song, song_info.artist)
         if search_result:
             logger.debug(f"Search result: {search_result}")
-            song_info['spotify_uri'] = search_result
+            return search_result
         else:
             logger.warning("No Spotify URI found for song.")
-
-        if 'spotify_uri' in song_info and song_info['spotify_uri']:
-            logger.debug("Using provided spotify_uri from song_info.")
-
-            return song_info['spotify_uri']
-        else:
-            logger.warning("No spotify_uri provided in song request.")
             return None
 
     def available_in_market(self, song_uri: str) -> bool:

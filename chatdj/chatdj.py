@@ -3,10 +3,11 @@ from typing import List, Optional
 import sys
 import time
 import json
+import re
 
 import openai
 from pydantic import BaseModel
-from spotipy import Spotify, SpotifyOAuth, SpotifyException
+from spotipy import Spotify, SpotifyException
 
 logger = logging.getLogger('mongobate.chatdj')
 logger.setLevel(logging.DEBUG)
@@ -21,15 +22,43 @@ class SongRequest(BaseModel):
 
 class SongExtractor:
     """SongExtractor using Chat Completions API to extract song/artist pairs."""
-    def __init__(self, openai_api_key: str):
+    def __init__(self, openai_api_key: str, spotify_client: Optional[Spotify] = None):
         openai.api_key = openai_api_key
+        self.spotify_client = spotify_client
 
     def extract_songs(self, message: str, song_count: int = 1) -> List[SongRequest]:
         """
-        Uses the OpenAI Chat Completions API to extract exactly song_count
-        song requests from the provided message. The assistant is instructed to
-        return a JSON array of objects with exactly two keys: 'song' and 'artist'.
+        Extract song requests from the provided message.
+        
+        If the message contains a properly formatted Spotify URI and a spotify_client is provided,
+        this method retrieves the track's song name and primary artist via the Spotify API and returns
+        a list of SongRequest objects containing 'song', 'artist', and 'spotify_uri'.
+        
+        Otherwise, it falls back to using the Chat Completions API to extract exactly song_count song
+        request(s) (with only 'song' and 'artist' keys) from the message.
         """
+        # Check if the message contains any Spotify track URIs.
+        spotify_uri_pattern = r"(spotify:track:[a-zA-Z0-9]+|https?://open\.spotify\.com/track/[a-zA-Z0-9]+)"
+        found_uris = re.findall(spotify_uri_pattern, message)
+        if found_uris and self.spotify_client:
+            # Remove duplicates and limit the number to song_count.
+            unique_uris = list(dict.fromkeys(found_uris))[:song_count]
+            songs = []
+            for uri in unique_uris:
+
+                try:
+                    track_info = self.spotify_client.track(uri)
+                    song_name = track_info.get('name', '')
+                    # Assume the first listed artist is the primary artist.
+                    artist_name = track_info.get('artists', [{}])[0].get('name', '')
+
+                    songs.append(SongRequest(song=song_name, artist=artist_name, spotify_uri=uri))
+                except Exception as e:
+                    logger.exception(f"Error retrieving track info for URI {uri}: {e}")
+            if songs:
+                return songs
+
+        # If no valid Spotify URI is found, fall back to Chat Completions API extraction.
         messages = [
             {
                 "role": "system",
@@ -47,7 +76,7 @@ class SongExtractor:
         ]
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-4",  # You can change to gpt-3.5-turbo if needed.
+                model="gpt-4o",  # or use gpt-3.5-turbo if desired
                 messages=messages,
                 temperature=0
             )
@@ -59,30 +88,23 @@ class SongExtractor:
                 content = "\n".join(lines).strip()
             data = json.loads(content)
             songs = [SongRequest(**item) for item in data]
-            logger.debug(f"Extracted songs: {songs}")
+            logger.debug(f"Extracted songs using Chat API: {songs}")
             return songs
         except Exception as e:
-            logger.exception("Failed to extract song requests.", exc_info=e)
+            logger.exception("Failed to extract song requests via Chat API.", exc_info=e)
             return []
 
 class AutoDJ:
     """AutoDJ class using Spotify APIs.
     The search_track_uri method applies filtering to only return tracks available in the US market,
     avoids live versions, and returns the most popular match for an exact artist match."""
-    def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
-        self.sp_oauth = SpotifyOAuth(
-            client_id=client_id,
-            client_secret=client_secret,
-            redirect_uri=redirect_uri,
-            scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-read-private",
-            open_browser=False
-        )
-        logger.debug("Initializing Spotify client.")
-        self.spotify = Spotify(auth_manager=self.sp_oauth)
+    def __init__(self, spotify: Spotify):
+        self.spotify = spotify
         logger.debug("Prompting user for playback device selection.")
         self.playback_device = self._select_playback_device()
         logger.debug("Clearing playback context.")
         self.playing_first_track = False
+
         self.queued_tracks = []
         self.clear_playback_context()
         self._print_variables()
@@ -274,62 +296,4 @@ class AutoDJ:
         except SpotifyException as e:
             logger.exception("Failed to skip song.", exc_info=e)
             return False
-
-# ------------------------------------------------------------------
-# Main usage example.
-# ------------------------------------------------------------------
-if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-    from pprint import pprint
-
-    load_dotenv()
-    logging.basicConfig()
-
-    # Initialize the SongExtractor and AutoDJ with API keys and credentials.
-    song_extractor = SongExtractor(os.getenv('OPENAI_API_KEY'))
-    auto_dj = AutoDJ(
-        os.getenv('SPOTIFY_CLIENT_ID'),
-        os.getenv('SPOTIFY_CLIENT_SECRET'),
-        os.getenv('SPOTIFY_REDIRECT_URI')
-    )
-
-    # Show the current queue.
-    queue = auto_dj.spotify.queue()
-    print("\nCurrent queue length:", len(queue['queue']))
-    for item in queue['queue']:
-        print(item['name'])
-
-    auto_dj.clear_playback_context()
-
-    queue = auto_dj.spotify.queue()
-    print("\nQueue length after clearing:", len(queue['queue']))
-    for item in queue['queue']:
-        print(item['name'])
-    
-    # Example message containing song requests.
-    message = "Play Dancing Queen by ABBA and Bohemian Rhapsody by Queen"
-    songs = song_extractor.extract_songs(message, song_count=2)
-
-    for song in songs:
-        # If the Chat API did not supply a spotify_uri, search for it.
-        if not song.spotify_uri:
-            track_uri = auto_dj.search_track_uri(song.song, song.artist)
-            if not track_uri:
-                logger.warning(f"No track found for {song.artist} - {song.song}")
-                continue
-            song.spotify_uri = track_uri
-        # Check if the track is available in the user's market before queuing.
-        user_market = auto_dj.get_user_market()
-        if user_market and user_market in auto_dj.get_song_markets(song.spotify_uri):
-            auto_dj.add_song_to_queue(song.spotify_uri)
-    
-    # Main loop to check and manage the queue.
-    try:
-        while True:
-            if not auto_dj.check_queue_status():
-                break
-            time.sleep(5)
-    except KeyboardInterrupt:
-        logger.info("Exit signal received. Stopping playback.")
-        auto_dj.clear_playback_context()
+        

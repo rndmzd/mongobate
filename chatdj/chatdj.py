@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Optional
 import sys
 import time
+import json
 
 import openai
 from spotipy import Spotify, SpotifyOAuth, SpotifyException
@@ -14,56 +15,39 @@ class SongExtractor:
         self.openai_client = openai.OpenAI(api_key=api_key)
 
     def extract_songs(self, message, song_count=1):
-        """Use OpenAI GPT-4o to extract song titles from the message."""
+        """
+        Use OpenAI GPT-4o to extract song request info from the message.
+        Returns a list of dictionaries containing 'artist', 'song', and 'spotify_uri'.
+        """
         try:
             response = self.openai_client.chat.completions.create(
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a music bot that can extract song titles from messages."
+                        "content": "You are a music bot that processes song requests."
                     },
                     {
                         "role": "user",
-                        "content": f"Extract exactly {song_count} song title{'s' if song_count > 1 else ''} from the following message: '{message}'. Respond with the artist and song title for each result with one per line."
+                        "content": f"Extract exactly {song_count} song request(s) from the following message: '{message}'. Respond with a JSON array where each element is an object with the keys 'artist', 'song', and 'spotify_uri'. Do not include any extra text or formatting."
                     }
                 ],
                 model="gpt-4o"
             )
 
             logger.debug(f"response: {response}")
+            json_response = response.choices[0].message.content.strip()
+            # Remove markdown code fences if present
+            if json_response.startswith("```"):
+                lines = json_response.splitlines()
+                # Remove any lines that start with triple backticks
+                lines = [line for line in lines if not line.strip().startswith("```")]
+                json_response = "\n".join(lines).strip()
+            song_requests = json.loads(json_response)
+            logger.debug(f"song_requests: {song_requests}")
+            return song_requests
 
-            song_titles_response = response.choices[0].message.content.strip().split('\n')
-            song_titles = []
-            for idx, resp in enumerate(song_titles_response):
-                if ' - ' in resp:
-                    artist, song = resp.split(' - ', 1)
-                    song_titles.append(
-                        {
-                            "artist": artist.strip(),
-                            "song": song.strip(),
-                            "gpt": True
-                        }
-                    )
-                else:
-                    logger.warning(f"Unexpected format in response: {resp}")
-                    #if len(song_titles_response) == 1 and song_count == 1:
-                    if song_count == 1:
-                        logger.warning("Returning original request text as song title.")
-                        song_titles.append(
-                            {
-                                "artist": "",
-                                "song": message,
-                                "gpt": False
-                            }
-                        )
-
-            logger.debug(f'song_titles: {song_titles}')
-            logger.debug(f"len(song_titles): {len(song_titles)}")
-
-            return song_titles
-
-        except openai.APIError as e:
-            logger.exception("Failed to extract song titles", exc_info=e)
+        except Exception as e:
+            logger.exception("Failed to extract song requests.", exc_info=e)
             return []
 
 
@@ -327,10 +311,11 @@ class AutoDJ:
         try:
             if track_info := self.spotify.track(track_uri):
                 logger.debug(f"track_info: {track_info}")
-                return track_info['available_markets']
+                return track_info.get('available_markets', []) or []
             return []
         except SpotifyException as e:
             logger.exception("Failed to get song markets.", exc_info=e)
+            return []
 
     def playback_active(self) -> bool:
         """
@@ -380,12 +365,6 @@ if __name__ == "__main__":
 
     queue = auto_dj.spotify.queue()
     print()
-    #pprint(queue)
-    #print()
-    #pprint(queue['currently_playing'])
-    #print()
-    #pprint(queue['queue'])
-    print()
     print(len(queue['queue']))
     [print(i['name']) for i in queue['queue']]
 
@@ -393,27 +372,20 @@ if __name__ == "__main__":
 
     queue = auto_dj.spotify.queue()
     print()
-    #pprint(queue)
-    #print()
-    #pprint(queue['currently_playing'])
-    #print()
-    #pprint(queue['queue'])
-    print()
     print(len(queue['queue']))
     [print(i['name']) for i in queue['queue']]
     
-    # sys.exit()
-
     # Example usage
     message = "Play Dancing Queen by ABBA and Bohemian Rhapsody by Queen"
     songs = song_extractor.extract_songs(message, song_count=2)
 
     for song in songs:
-        if track_uri := auto_dj.find_song(song)['tracks']['items'][0]['uri']:
-            if auto_dj.get_user_market() in auto_dj.get_song_markets(track_uri):
-                auto_dj.add_song_to_queue(track_uri)
-            else:
-                logger.warning("Song not available in user's market. Skipping.")
+        track_uri = song.get('spotify_uri')
+        if not track_uri:
+            logger.warning(f"No spotify_uri found for song: {song}")
+            continue
+        if auto_dj.get_user_market() in auto_dj.get_song_markets(track_uri):
+            auto_dj.add_song_to_queue(track_uri)
 
     # Main loop to check queue status
     try:

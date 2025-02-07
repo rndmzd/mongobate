@@ -8,6 +8,7 @@ import re
 
 import openai
 from pydantic import BaseModel
+import requests
 from spotipy import Spotify, SpotifyException
 
 from utils.structured_logging import get_structured_logger
@@ -23,79 +24,327 @@ class SongRequest(BaseModel):
     spotify_uri: Optional[str] = None
 
 class SongExtractor:
-    """SongExtractor using Chat Completions API to extract song/artist pairs."""
-    def __init__(self, api_key: str, spotify_client: Optional[Spotify] = None):
-        self.openai_client = openai.OpenAI(api_key=api_key)
+    """
+    Extracts song and artist information from a message.
+    
+    If a Spotify URI is found and a spotify_client is provided, it uses the Spotify API.
+    Otherwise, it uses the ChatGPT completions API to extract song requests.
+    If an extracted song request has no artist, it uses a hybrid approach (Google Custom Search + ChatGPT)
+    to look up the artist name.
+    """
+    def __init__(
+        self, 
+        openai_api_key: str, 
+        spotify_client: Optional[object] = None, 
+        google_api_key: Optional[str] = None, 
+        google_cx: Optional[str] = None
+    ):
+        # Set up the OpenAI API key.
+        openai.api_key = openai_api_key
         self.spotify_client = spotify_client
+        self.google_api_key = google_api_key
+        self.google_cx = google_cx
 
     def extract_songs(self, message: str, song_count: int = 1) -> List[SongRequest]:
-        """
-        Extract song requests from the provided message.
-        
-        If the message contains a properly formatted Spotify URI and a spotify_client is provided,
-        this method retrieves the track's song name and primary artist via the Spotify API and returns
-        a list of SongRequest objects containing 'song', 'artist', and 'spotify_uri'.
-        
-        Otherwise, it falls back to using the Chat Completions API to extract exactly song_count song
-        request(s) (with only 'song' and 'artist' keys) from the message.
-        """
-        # Check if the message contains any Spotify track URIs.
-        spotify_uri_pattern = r"(spotify:track:[a-zA-Z0-9]+|https?://open\.spotify\.com/track/[a-zA-Z0-9]+)"
-        found_uris = re.findall(spotify_uri_pattern, message)
-        if found_uris and self.spotify_client:
-            # Remove duplicates and limit the number to song_count.
-            unique_uris = list(dict.fromkeys(found_uris))[:song_count]
+        try:
+            logger.debug("song.extract.start",
+                        message="Starting song extraction",
+                        data={
+                            "message": message,
+                            "requested_count": song_count
+                        })
+            # Look for Spotify track URIs
+            spotify_uri_pattern = r"(spotify:track:[a-zA-Z0-9]+|https?://open\.spotify\.com/track/[a-zA-Z0-9]+)"
+            found_uris = re.findall(spotify_uri_pattern, message)
+            logger.debug("song.extract.spotify.uris",
+                        message="Found Spotify URIs in message",
+                        data={
+                            "found_uris": found_uris,
+                            "uri_count": len(found_uris)
+                        })
+
             songs = []
-            for uri in unique_uris:
+            if found_uris and self.spotify_client:
+                unique_uris = list(dict.fromkeys(found_uris))[:song_count]
+                logger.debug("song.extract.spotify.process",
+                           message="Processing Spotify URIs",
+                           data={
+                               "unique_uris": unique_uris,
+                               "processing_count": len(unique_uris)
+                           })
+                for uri in unique_uris:
+                    try:
+                        track_info = self.spotify_client.track(uri)
+                        song_name = track_info.get('name', '')
+                        artist_name = track_info.get('artists', [{}])[0].get('name', '')
+                        logger.debug("song.extract.spotify.track",
+                                   message="Retrieved track information",
+                                   data={
+                                       "uri": uri,
+                                       "song": song_name,
+                                       "artist": artist_name,
+                                       "track_info": track_info
+                                   })
+                        songs.append(SongRequest(song=song_name, artist=artist_name, spotify_uri=uri))
+                    except Exception as exc:
+                        logger.exception("spotify.track.error",
+                                       message="Error retrieving track info",
+                                       exc=exc,
+                                       data={
+                                           "uri": uri,
+                                           "error_type": type(exc).__name__
+                                       })
+                if songs:
+                    logger.debug("song.extract.spotify.complete",
+                               message="Completed Spotify URI extraction",
+                               data={"extracted_songs": [s.dict() for s in songs]})
+                    return songs
 
-                try:
-                    track_info = self.spotify_client.track(uri)
-                    song_name = track_info.get('name', '')
-                    # Assume the first listed artist is the primary artist.
-                    artist_name = track_info.get('artists', [{}])[0].get('name', '')
+            # Fallback to ChatGPT
+            logger.debug("song.extract.chat.start",
+                        message="Starting ChatGPT extraction",
+                        data={"message": message})
+            messages_payload = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a music bot that processes song requests. "
+                        "Extract exactly {} song request(s) from the following message. "
+                        "Return a JSON array of objects with exactly two keys: 'song' and 'artist'. "
+                        "If you can identify a song name but no artist is specified, include the song "
+                        "with an empty artist field. Treat single terms or phrases as potential song "
+                        "titles if they could be song names. For example, 'mucka blucka' would be "
+                        "extracted as {{'song': 'Mucka Blucka', 'artist': ''}}."
+                    ).format(song_count)
+                },
+                {
+                    "role": "user",
+                    "content": f"Extract exactly {song_count} song request(s) from the following message: '{message}'"
+                }
+            ]
+            try:
+                logger.debug("song.extract.chat.request",
+                           message="Sending request to ChatGPT",
+                           data={"messages": messages_payload})
+                response = openai.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages_payload,
+                    temperature=0
+                )
+                content = response.choices[0].message.content.strip()
+                logger.debug("song.extract.chat.response",
+                           message="Received ChatGPT response",
+                           data={"raw_content": content})
 
-                    songs.append(SongRequest(song=song_name, artist=artist_name, spotify_uri=uri))
-                except Exception as e:
-                    logger.exception(f"Error retrieving track info for URI {uri}: {e}")
-            if songs:
-                return songs
+                # Remove markdown code fences if present
+                if content.startswith("```"):
+                    lines = content.splitlines()
+                    lines = [line for line in lines if not line.strip().startswith("```")]
+                    content = "\n".join(lines).strip()
+                    logger.debug("song.extract.chat.clean",
+                               message="Cleaned markdown from response",
+                               data={"cleaned_content": content})
 
-        # If no valid Spotify URI is found, fall back to Chat Completions API extraction.
-        messages = [
+                data = json.loads(content)
+                songs = [SongRequest(**item) for item in data]
+                logger.debug("song.extract.chat.success",
+                           message="Successfully parsed ChatGPT response",
+                           data={"parsed_songs": [s.dict() for s in songs]})
+            except Exception as exc:
+                logger.exception("song.extract.chat.error",
+                               message="Failed to extract songs via ChatGPT",
+                               exc=exc,
+                               data={
+                                   "message": message,
+                                   "error_type": type(exc).__name__
+                               })
+                return []
+
+            # Artist lookup for missing artists
+            for song_request in songs:
+                if not song_request.artist.strip():
+                    logger.debug("song.extract.artist.lookup",
+                               message="Looking up missing artist",
+                               data={"song": song_request.song})
+                    found_artist = self.lookup_artist_hybrid(song_request.song)
+                    song_request.artist = found_artist if found_artist else "Unknown Artist"
+                    logger.debug("song.extract.artist.result",
+                               message="Artist lookup complete",
+                               data={
+                                   "song": song_request.song,
+                                   "found_artist": song_request.artist
+                               })
+            
+            logger.debug("song.extract.complete",
+                        message="Song extraction complete",
+                        data={"final_songs": [s.dict() for s in songs]})
+            return songs
+        except Exception as exc:
+            logger.exception("song.extract.error",
+                           message="Failed to extract songs",
+                           exc=exc,
+                           data={
+                               "message": message,
+                               "error_type": type(exc).__name__
+                           })
+            return []
+
+    def lookup_artist_hybrid(self, song_name: str) -> str:
+        """
+        Hybrid approach: first uses Google Custom Search to fetch a snippet,
+        then uses ChatGPT to confirm the artist.
+        """
+        logger.debug("artist.lookup.start",
+                    message="Starting hybrid artist lookup",
+                    data={"song": song_name})
+                    
+        snippet = self.lookup_artist_by_song_via_google(song_name)
+        if snippet:
+            logger.debug("artist.lookup.google.success",
+                        message="Found Google search snippet",
+                        data={
+                            "song": song_name,
+                            "snippet": snippet
+                        })
+            artist = self.lookup_artist_with_chat(song_name, snippet)
+            if artist:
+                logger.debug("artist.lookup.chat.success",
+                           message="Successfully extracted artist from snippet",
+                           data={
+                               "song": song_name,
+                               "artist": artist,
+                               "snippet": snippet
+                           })
+                return artist
+            else:
+                logger.warning("artist.lookup.chat.failed",
+                             message="Failed to extract artist from snippet",
+                             data={
+                                 "song": song_name,
+                                 "snippet": snippet
+                             })
+        else:
+            logger.warning("artist.lookup.google.failed",
+                         message="No Google search results found",
+                         data={"song": song_name})
+        return ""
+
+    def lookup_artist_by_song_via_google(self, song_name: str) -> str:
+        """
+        Uses the Google Custom Search API to fetch a snippet regarding the song.
+        """
+        if not self.google_api_key or not self.google_cx:
+            logger.error("artist.lookup.google.config",
+                        message="Google API key or custom search engine ID (CX) not provided")
+            return ""
+            
+        query = f"Who is the song '{song_name}' by?"
+        endpoint = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": self.google_api_key,
+            "cx": self.google_cx,
+            "q": query,
+        }
+        
+        logger.debug("artist.lookup.google.request",
+                    message="Sending Google search request",
+                    data={
+                        "song": song_name,
+                        "query": query
+                    })
+                    
+        try:
+            response = requests.get(endpoint, params=params, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Use the first item's snippet if available.
+            if "items" in data and data["items"]:
+                snippet = data["items"][0].get("snippet", "")
+                logger.debug("artist.lookup.google.response",
+                           message="Received Google search response",
+                           data={
+                               "song": song_name,
+                               "snippet": snippet,
+                               "total_results": len(data["items"])
+                           })
+                return snippet
+                
+            logger.warning("artist.lookup.google.empty",
+                         message="No search results found",
+                         data={"song": song_name})
+            return ""
+            
+        except Exception as exc:
+            logger.exception("artist.lookup.google.error",
+                           message="Error during Google search",
+                           exc=exc,
+                           data={
+                               "song": song_name,
+                               "error_type": type(exc).__name__
+                           })
+            return ""
+
+    def lookup_artist_with_chat(self, song_name: str, snippet: str) -> str:
+        """
+        Uses the ChatGPT completions API with the search snippet to confirm the artist.
+        """
+        messages_payload = [
             {
                 "role": "system",
                 "content": (
-                    "You are a music bot that processes song requests. "
-                    "Extract exactly {} song request(s) from the following message. "
-                    "Return a JSON array of objects with exactly two keys: 'song' and 'artist'. "
-                    "If the user does not specify an artist, make a guess based on the song name. "
-                    "Do not include any additional commentary."
-                ).format(song_count)
+                    "You are a helpful assistant specialized in music information. "
+                    "Your task is to extract the artist name from the provided information. "
+                    "Return ONLY the artist name, nothing else. If you cannot determine "
+                    "the artist with certainty, return an empty string."
+                )
             },
             {
                 "role": "user",
-                "content": f"Extract exactly {song_count} song request(s) from the following message: '{message}'"
+                "content": (
+                    f"Based on the following information: '{snippet}', "
+                    f"who is the artist for the song '{song_name}'? "
+                    "Provide only the artist's name."
+                )
             }
         ]
+        
+        logger.debug("artist.lookup.chat.request",
+                    message="Sending artist extraction request to ChatGPT",
+                    data={
+                        "song": song_name,
+                        "snippet": snippet
+                    })
+                    
         try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4o",  # or use gpt-3.5-turbo if desired
-                messages=messages,
+            response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=messages_payload,
                 temperature=0
             )
             content = response.choices[0].message.content.strip()
-            # Remove markdown code fences if present.
-            if content.startswith("```"):
-                lines = content.splitlines()
-                lines = [line for line in lines if not line.strip().startswith("```")]
-                content = "\n".join(lines).strip()
-            data = json.loads(content)
-            songs = [SongRequest(**item) for item in data]
-            logger.debug(f"Extracted songs using Chat API: {songs}")
-            return songs
-        except Exception as e:
-            logger.exception("Failed to extract song requests via Chat API.", exc_info=e)
-            return []
+            
+            # Assume the artist's name is on the first line.
+            artist_name = content.splitlines()[0].strip()
+            
+            logger.debug("artist.lookup.chat.response",
+                        message="Received artist extraction response",
+                        data={
+                            "song": song_name,
+                            "artist": artist_name,
+                            "raw_response": content
+                        })
+            return artist_name
+            
+        except Exception as exc:
+            logger.exception("artist.lookup.chat.error",
+                           message="Error during artist extraction",
+                           exc=exc,
+                           data={
+                               "song": song_name,
+                               "error_type": type(exc).__name__
+                           })
+            return ""
 
 class AutoDJ:
     """AutoDJ class using Spotify APIs.

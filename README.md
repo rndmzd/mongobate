@@ -2,6 +2,32 @@
 
 A Python-based application for managing chat interactions, music playback, and event handling with MongoDB integration. This project provides a flexible framework for handling various chat-based events, managing music queues, and triggering custom actions.
 
+## Recent Changes
+
+### Logging Improvements
+
+- Added structured logging throughout the application
+- Enhanced debug logging for better troubleshooting
+- Improved error context in log messages
+- Added detailed logging for song requests and OBS operations
+- Standardized log event types and message formats
+
+### OBS Integration Improvements
+
+- Fixed OBS WebSocket connection handling
+- Removed redundant connection attempts at startup
+- Improved timeout handling for OBS operations
+- Better error handling for OBS WebSocket operations
+- Dynamic timeouts for overlay operations based on display duration
+
+### Song Request Enhancements
+
+- Better handling of song requests without artist names
+- Improved artist lookup using Google Search and ChatGPT
+- Enhanced validation of song request messages
+- Better feedback for failed song requests
+- Structured logging for song request process
+
 ## Features
 
 ### Core Components
@@ -237,9 +263,21 @@ mongobate/
     └── jsonencoders.py # JSON encoding utilities
 ```
 
-## License
+## Troubleshooting
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### OBS Connection Issues
+
+- Ensure OBS is running before starting the application
+- Verify WebSocket server is enabled in OBS
+- Check OBS WebSocket password in config.ini
+- Monitor logs for connection issues
+
+### Song Request Issues
+
+- Verify Spotify credentials are correct
+- Ensure OpenAI API key is valid
+- Check Google API configuration for artist lookups
+- Monitor logs for request processing issues
 
 ## Contributing
 
@@ -256,3 +294,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## TODO
 
 - Add private message alert system
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

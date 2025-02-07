@@ -456,5 +456,6 @@ class Actions(HTTPRequestHandler):
         """Set the last VIP audio play time for a user."""
         return self.user_collection.update_one(
             {"username": user},
-            {"$set": {"last_vip_audio_play": timestamp}}
-        )
+            {"$set": {"last_vip_audio_play": timestamp}},
+            upsert=True
+        ).acknowledged

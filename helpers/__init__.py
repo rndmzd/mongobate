@@ -8,13 +8,15 @@ from helpers.actions import Actions
 from helpers.checks import Checks
 from helpers.cbevents import CBEvents
 from helpers.commands import Commands
-from utils.logging_config import setup_basic_logging
+#from utils.logging_config import setup_basic_logging
+from utils.structured_logging import get_structured_logger
 
-logger = setup_basic_logging(component='helpers')
+logger = get_structured_logger('mongobate.helpers')
 
 config_path = Path(__file__).parent.parent / 'config.ini'
 
 config = configparser.ConfigParser()
+
 config.read(config_path)
 
 logger.debug("mongodb.client.create",

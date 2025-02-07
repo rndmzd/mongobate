@@ -86,4 +86,4 @@ class Commands:
                            exc=exc,
                            message="Failed to process command",
                            data={"command": command})
-        
+            return False

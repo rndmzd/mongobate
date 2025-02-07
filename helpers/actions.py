@@ -1,14 +1,8 @@
-import datetime
 from datetime import datetime as DateTime
-import logging
 from typing import Dict, List, Optional
 
-from rapidfuzz import fuzz
 import requests
 import base64
-
-from chatdj.chatdj import SongRequest
-
 
 from chatdj.chatdj import SongRequest
 
@@ -92,7 +86,12 @@ class Actions(HTTPRequestHandler):
             from chatdj import SongExtractor, AutoDJ
             from . import spotify_client, song_cache_collection
 
-            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"), spotify_client)
+            self.song_extractor = SongExtractor(
+                config.get("OpenAI", "api_key"), 
+                spotify_client=spotify_client,
+                google_api_key=config.get("Search","google_api_key"),
+                google_cx=config.get("Search", "google_cx")
+            )
             self.auto_dj = AutoDJ(spotify_client)
             self.song_cache_collection = song_cache_collection
         
@@ -121,10 +120,8 @@ class Actions(HTTPRequestHandler):
                 port=config.getint("OBS", "port"),
                 password=config.get("OBS", "password")
             )
-            if self.obs.connect_sync():
-                logger.info("actions.obs.connect", message="Successfully connected to OBS")
-            else:
-                logger.error("actions.obs.connect", message="Failed to connect to OBS")
+            # Don't connect here - let the first actual OBS operation handle connection
+            logger.info("actions.obs.init.complete", message="OBS handler initialized")
             
             if self.chatdj_enabled:
                 self.request_overlay_duration = config.getint("General", "request_overlay_duration")
@@ -194,12 +191,30 @@ class Actions(HTTPRequestHandler):
                          message="Cannot search for song - ChatDJ is not enabled")
             return None
         
+        logger.debug("spotify.search.start",
+                    message="Starting Spotify song search",
+                    data={
+                        "song": song_info.song,
+                        "artist": song_info.artist
+                    })
+        
         search_result = self.auto_dj.search_track_uri(song_info.song, song_info.artist)
         if search_result:
-            logger.debug(f"Search result: {search_result}")
+            logger.debug("spotify.search.success",
+                        message="Found Spotify track",
+                        data={
+                            "uri": search_result,
+                            "song": song_info.song,
+                            "artist": song_info.artist
+                        })
             return search_result
         else:
-            logger.warning("No Spotify URI found for song.")
+            logger.warning("spotify.search.notfound",
+                         message="No Spotify URI found for song",
+                         data={
+                             "song": song_info.song,
+                             "artist": song_info.artist
+                         })
             return None
 
     def available_in_market(self, song_uri: str) -> bool:
@@ -210,18 +225,32 @@ class Actions(HTTPRequestHandler):
             return False
 
         try:
+            logger.debug("spotify.market.check.start",
+                        message="Checking market availability",
+                        data={"uri": song_uri})
+            
             user_market = self.auto_dj.get_user_market()
             song_markets = self.auto_dj.get_song_markets(song_uri)
-            logger.debug("spotify.market.check",
-                        message="Checking market availability",
+            
+            is_available = user_market in song_markets
+            logger.debug("spotify.market.check.complete",
+                        message="Market availability check complete",
                         data={
+                            "uri": song_uri,
                             "user_market": user_market,
-                            "available_markets": song_markets
+                            "available_markets": song_markets,
+                            "is_available": is_available
                         })
-            return user_market in song_markets
+            return is_available
+            
         except Exception as exc:
-            logger.exception("spotify.market.error", exc=exc,
-                           message="Failed to check market availability")
+            logger.exception("spotify.market.error",
+                           message="Failed to check market availability",
+                           exc=exc,
+                           data={
+                               "uri": song_uri,
+                               "error_type": type(exc).__name__
+                           })
             return False
 
     def add_song_to_queue(self, uri: str, requester_name: str, song_details: str) -> bool:
@@ -231,26 +260,56 @@ class Actions(HTTPRequestHandler):
                          message="Cannot add song to queue - ChatDJ is not enabled")
             return False
 
-        logger.info("spotify.queue.add",
-                   message="Adding song to queue",
-                   data={
-                       "uri": uri,
-                       "requester": requester_name,
-                       "song": song_details
-                   })
+        logger.debug("spotify.queue.add.start",
+                    message="Adding song to queue",
+                    data={
+                        "uri": uri,
+                        "requester": requester_name,
+                        "song": song_details
+                    })
         
         try:
-            if self.auto_dj.add_song_to_queue(uri):
+            queue_result = self.auto_dj.add_song_to_queue(uri)
+            if queue_result:
+                logger.debug("spotify.queue.add.success",
+                           message="Successfully added song to queue",
+                           data={
+                               "uri": uri,
+                               "song": song_details
+                           })
+                           
+                logger.debug("spotify.queue.overlay.start",
+                           message="Triggering song requester overlay",
+                           data={
+                               "requester": requester_name,
+                               "song": song_details,
+                               "duration": self.request_overlay_duration
+                           })
+                           
                 self.trigger_song_requester_overlay(
                     requester_name,
                     song_details,
                     self.request_overlay_duration if self.request_overlay_duration else 10
                 )
                 return True
+                
+            logger.error("spotify.queue.add.failed",
+                        message="Failed to add song to queue",
+                        data={
+                            "uri": uri,
+                            "song": song_details
+                        })
             return False
+            
         except Exception as exc:
-            logger.exception("spotify.queue.error", exc=exc,
-                           message="Failed to add song to queue")
+            logger.exception("spotify.queue.error",
+                           message="Failed to add song to queue",
+                           exc=exc,
+                           data={
+                               "uri": uri,
+                               "song": song_details,
+                               "error_type": type(exc).__name__
+                           })
             return False
 
     def skip_song(self) -> bool:
@@ -261,16 +320,23 @@ class Actions(HTTPRequestHandler):
                          data={"component": "chatdj"})
             return False
 
-        logger.info("spotify.playback.skip",
-                   message="Skipping current song",
-                   data={"component": "chatdj"})
+        logger.debug("spotify.playback.skip.start",
+                    message="Attempting to skip current song")
         try:
-            return self.auto_dj.skip_song()
+            skip_result = self.auto_dj.skip_song()
+            if skip_result:
+                logger.info("spotify.playback.skip.success",
+                          message="Successfully skipped current song")
+            else:
+                logger.error("spotify.playback.skip.failed",
+                           message="Failed to skip current song")
+            return skip_result
+            
         except Exception as exc:
             logger.exception("spotify.playback.error",
                            message="Failed to skip song",
                            exc=exc,
-                           data={"component": "chatdj"})
+                           data={"error_type": type(exc).__name__})
             return False
     
     def trigger_spray(self) -> bool:

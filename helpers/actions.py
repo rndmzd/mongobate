@@ -21,11 +21,16 @@ class HTTPRequestHandler:
             if response.status_code == 200:
                 if response.text:
                     try:
-                        logger.info(f"Success: {response.json()}")
+                        logger.info("http.request.success",
+                                  message="Request successful",
+                                  data={"response": response.json()})
                     except ValueError:
-                        logger.info(f"Success: {response.text}")
+                        logger.info("http.request.success",
+                                  message="Request successful",
+                                  data={"response": response.text})
                 else:
-                    logger.info("Success: No response body")
+                    logger.info("http.request.success",
+                              message="Request successful with empty response")
                 return True
             else:
                 logger.error("http.request.error",

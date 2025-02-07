@@ -448,11 +448,15 @@ class AutoDJ:
             # Start playback if not already active.
             if not self.playback_active() and len(self.queued_tracks) == 1:
                 self.playing_first_track = True
-            logger.debug(f"Current queued tracks: {self.queued_tracks}")
+            logger.debug("spotify.queue.status",
+                        message="Current queue status",
+                        data={"queued_tracks": self.queued_tracks})
             self._print_variables(True)
             return True
         except SpotifyException as e:
-            logger.exception("Failed to add song to queue", exc_info=e)
+            logger.exception("spotify.queue.add.error",
+                message="Failed to add song to queue",
+                exc=e)
             return False
 
     def check_queue_status(self, silent=False) -> bool:

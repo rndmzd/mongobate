@@ -78,7 +78,8 @@ class CBEvents:
                              data={"method": event_method})
                 return False
                 
-            logger.debug("event.process", message="Processing event", 
+            logger.debug("event.process.start",
+                        message="Processing event",
                         data={
                             "method": event_method,
                             "object": event_object
@@ -406,8 +407,8 @@ class CBEvents:
             if 'custom_actions' in self.active_components:
                 username = event['user']['username']
                 if username in action_users.keys():
-                    logger.info("event.chat.action", 
-                              message="Action user message received",
+                    logger.info("event.chat.action.message", 
+                              message="Received message from action user",
                               data={"username": username})
                     logger.info(f"Message from action user {username}.")
                     action_messages = action_users[username]
@@ -433,7 +434,9 @@ class CBEvents:
                             self.audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
-            logger.exception("Error processing private message event", exc_info=e)
+            logger.exception("event.message.private.error",
+                            message="Error processing private message event",
+                            exc=e)
             return False
     
     def room_subject_change(self, event):
@@ -445,10 +448,13 @@ class CBEvents:
         """
         try:
             # Process room subject change event
-            logger.info("Room subject change event received.")
+            logger.info("event.room.subject.change",
+                        message="Room subject change event received")
             return True
         except Exception as e:
-            logger.exception("Error processing room subject change event", exc_info=e)
+            logger.exception("event.room.subject.error",
+                            message="Error processing room subject change event",
+                            exc=e)
             return False
     
     def user_enter(self, event, vip_users):
@@ -479,7 +485,9 @@ class CBEvents:
                     current_time = time.time()
                     last_vip_audio_play = self.actions.get_last_vip_audio_play(username)
                     if not last_vip_audio_play or (current_time - last_vip_audio_play) > self.vip_audio_cooldown_seconds:
-                        logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
+                        logger.info("event.user.vip.audio.play",
+                                    message="VIP user not in cooldown, playing audio",
+                                    data={"username": username})
                         audio_file = vip_users[username]
                         logger.debug("event.user.enter.vip.audio",
                                    data={"audio_file": audio_file})
@@ -489,11 +497,13 @@ class CBEvents:
                                    data={"audio_file_path": audio_file_path})
                         
                         self.audio_player.play_audio(audio_file_path)
-                        logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
+                        logger.info("event.user.vip.audio.played",
+                                    message="VIP audio played and cooldown reset",
+                                    data={"username": username})
                         if not self.actions.set_last_vip_audio_play(username, current_time):
-                            logger.error(f"Failed to set last VIP audio play time for user: {username}")
-
-
+                            logger.error("event.user.vip.audio.cooldown.error",
+                                        message="Failed to set VIP audio cooldown time",
+                                        data={"username": username})
             return True
             
         except Exception as exc:

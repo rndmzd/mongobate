@@ -33,7 +33,8 @@ class OBSHandler:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             logger.debug("obs.init.loop",
-                        message="Created new event loop")
+                        message="Created new event loop",
+                        data={"loop_type": "new"})
         
         # Load scene definitions
         self.scenes = self._load_scenes()

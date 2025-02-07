@@ -17,7 +17,8 @@ config_path = Path(__file__).parent.parent / 'config.ini'
 config = configparser.ConfigParser()
 config.read(config_path)
 
-logger.debug('Creating MongoDB client.')
+logger.debug("mongodb.client.create",
+            message="Creating MongoDB client")
 mongo_config = config['MongoDB']
 mongo_client = MongoClient(
     host=os.getenv('MONGO_HOST', mongo_config.get('host', 'localhost')),

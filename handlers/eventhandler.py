@@ -126,6 +126,7 @@ class EventHandler:
             
             for user in vip_users:
                 logger.debug("users.vip.load",
+                           message="Loading VIP user",
                            data={"user": user})
                 self.vip_users[user['username']] = user['audio_file']
                 

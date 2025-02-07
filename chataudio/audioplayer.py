@@ -27,7 +27,7 @@ class AudioPlayer:
         if init_by_me:
             pygame.mixer.init()
         devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
-        logger.debug("audio.devices",
+        logger.debug("audio.devices.list",
                     message="Retrieved available audio devices",
                     data={"devices": devices})
         if init_by_me:

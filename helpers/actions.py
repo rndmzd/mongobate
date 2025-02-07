@@ -146,8 +146,10 @@ class Actions(HTTPRequestHandler):
                         data={"song": cached_song})
             return cached_song
         except Exception as exc:
-            logger.exception("cache.song.error", exc=exc,
-                           message="Failed to retrieve cached song")
+            logger.exception("cache.song.error",
+                           message="Failed to retrieve cached song",
+                           exc=exc,
+                           data={"song_info": song_info})
             return None
 
     def cache_song(self, song_info: Dict[str, str], optimized_results: List[Dict]) -> bool:
@@ -164,8 +166,13 @@ class Actions(HTTPRequestHandler):
                         data={"document_id": str(inserted_id)})
             return True
         except Exception as exc:
-            logger.exception("cache.song.error", exc=exc,
-                           message="Failed to cache song")
+            logger.exception("cache.song.error",
+                           message="Failed to cache song",
+                           exc=exc,
+                           data={
+                               "song_info": song_info,
+                               "optimized_results": optimized_results
+                           })
             return False
 
     def extract_song_titles(self, message: str, song_count: int) -> List[Dict[str, str]]:
@@ -439,7 +446,9 @@ class Actions(HTTPRequestHandler):
         """Get the last VIP audio play time for a user."""
         user_data = self.user_collection.find_one({"username": user})
         if not user_data:
-            logger.warning(f"User {user} not found.")
+            logger.warning("user.find.notfound",
+                         message="User not found",
+                         data={"username": user})
             return None
         return user_data.get("last_vip_audio_play")
     

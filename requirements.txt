@@ -1,5 +1,6 @@
 annotated-types==0.7.0
 anyio==4.4.0
+backoff==2.2.1
 boto3==1.34.138
 botocore==1.34.138
 certifi==2024.7.4

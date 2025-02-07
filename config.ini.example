@@ -16,6 +16,17 @@ log_file_db = logs/db.log
 log_file_app = logs/app.log
 log_max_size_mb = 10
 log_backup_count = 10
+# Enable/disable Elasticsearch logging
+elasticsearch_enabled = true
+
+[Elasticsearch]
+# Elasticsearch configuration
+host = localhost
+port = 9200
+index_prefix = mongobate
+use_ssl = false
+# API key authentication (preferred over username/password)
+api_key = your-api-key-here
 
 [Events API]
 # Events API configuration

@@ -1,10 +1,5 @@
-import datetime
-from bson import ObjectId
-import simplejson as json
-import threading
 import time
 
-from utils import MongoJSONEncoder
 from chataudio.audioplayer import AudioPlayer
 from utils.structured_logging import get_structured_logger
 
@@ -117,60 +112,184 @@ class CBEvents:
         }
         """
         try:
-            logger.info("event.tip", message="Tip event received")
+            logger.info("event.tip.received",
+                       message="Tip event received",
+                       data={
+                           "broadcaster": event.get("broadcaster"),
+                           "tokens": event.get("tip", {}).get("tokens"),
+                           "username": event.get("user", {}).get("username"),
+                           "is_anon": event.get("tip", {}).get("isAnon", False)
+                       })
             
             # Extract tip amount once for all checks
             tip_amount = event.get('tip', {}).get('tokens', 0)
+            tip_message = event.get('tip', {}).get('message', '').strip()
             
             if 'chat_auto_dj' in self.active_components:
-                logger.info("event.tip.song", message="Checking if skip song request")
+                logger.debug("event.tip.song.check",
+                           message="Checking song-related tip actions",
+                           data={
+                               "tip_amount": tip_amount,
+                               "message": tip_message
+                           })
                 
                 if self.checks.is_skip_song_request(tip_amount):
-                    logger.info("event.tip.song.skip", message="Skip song request detected")
+                    logger.info("event.tip.song.skip.detected",
+                              message="Skip song request detected",
+                              data={"tip_amount": tip_amount})
                     
                     if self.actions.is_playback_active():
-                        logger.info("event.tip.song.skip", message="Executing skip song")
+                        logger.info("event.tip.song.skip.execute",
+                                  message="Executing skip song request")
                         skip_song_result = self.actions.skip_song()
-                        logger.debug(f'skip_song_result: {skip_song_result}')
+                        logger.debug("event.tip.song.skip.result",
+                                   message="Skip song execution complete",
+                                   data={"success": skip_song_result})
 
-                logger.info("Checking if song request.")
-                if self.checks.is_song_request(event["tip"]["tokens"]):
-                    logger.info("Song request detected.")
-                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
-                    logger.info(f"Request count: {request_count}")
-                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
-                    logger.debug(f'song_extracts:  {song_extracts}')
+                logger.debug("event.tip.song.request.check",
+                           message="Checking for song request")
+                if self.checks.is_song_request(tip_amount):
+                    # Validate message length
+                    if len(tip_message) < 3:
+                        logger.warning("event.tip.song.request.invalid",
+                                     message="Message too short for song request",
+                                     data={
+                                         "message": tip_message,
+                                         "length": len(tip_message)
+                                     })
+                        return True
+
+                    logger.info("event.tip.song.request.detected",
+                              message="Song request detected",
+                              data={
+                                  "tip_amount": tip_amount,
+                                  "message": tip_message
+                              })
+                    
+                    request_count = self.checks.get_request_count(tip_amount)
+                    logger.debug("event.tip.song.request.count",
+                               message="Determined request count",
+                               data={"count": request_count})
+                    
+                    song_extracts = self.actions.extract_song_titles(
+                        tip_message,
+                        request_count
+                    )
+
+                    if not song_extracts:
+                        logger.warning("event.tip.song.request.empty",
+                                     message="No songs could be extracted from message",
+                                     data={
+                                         "message": tip_message,
+                                         "tip_amount": tip_amount
+                                     })
+                        return True
+
+                    logger.debug("event.tip.song.request.extracts",
+                               message="Extracted song information",
+                               data={"extracts": [s.dict() for s in song_extracts]})
+                    
+                    songs_processed = 0
                     for song_info in song_extracts:
+                        logger.debug("event.tip.song.request.process",
+                                   message="Processing song request",
+                                   data={"song_info": str(song_info)})
+                        
                         if song_info.spotify_uri:
                             song_uri = song_info.spotify_uri
+                            logger.debug("event.tip.song.request.uri.existing",
+                                       message="Using existing Spotify URI",
+                                       data={"uri": song_uri})
                         else:
                             song_uri = self.actions.find_song_spotify(song_info)
-                        logger.debug(f'song_uri: {song_uri}')
-                        if song_uri:
-                            if not self.actions.available_in_market(song_uri):
-                                logger.warning(f"Song not available in user market: {song_info}")
-                                continue
-                            song_details = f"{song_info.artist} - {song_info.song}"
-                            add_queue_result = self.actions.add_song_to_queue(song_uri, event["user"]["username"], song_details)
-                            logger.debug(f'add_queue_result: {add_queue_result}')
-                            if not add_queue_result:
-                                logger.error(f"Failed to add song to queue: {song_info}")
-                            else:
-                                logger.info(f"Song added to queue: {song_info}")
+                            logger.debug("event.tip.song.request.uri.search",
+                                       message="Searched for Spotify URI",
+                                       data={
+                                           "song_info": str(song_info),
+                                           "found_uri": song_uri
+                                       })
+                        
+                        if not song_uri:
+                            logger.warning("event.tip.song.request.notfound",
+                                         message="Could not find song on Spotify",
+                                         data={"song_info": str(song_info)})
+                            continue
+                            
+                        if not self.actions.available_in_market(song_uri):
+                            logger.warning("event.tip.song.request.market",
+                                        message="Song not available in market",
+                                        data={
+                                            "song_info": str(song_info),
+                                            "uri": song_uri
+                                        })
+                            continue
+                        
+                        song_details = f"{song_info.artist} - {song_info.song}"
+                        logger.debug("event.tip.song.request.queue.attempt",
+                                   message="Attempting to add song to queue",
+                                   data={
+                                       "song_details": song_details,
+                                       "uri": song_uri,
+                                       "username": event["user"]["username"]
+                                   })
+                        
+                        add_queue_result = self.actions.add_song_to_queue(
+                            song_uri,
+                            event["user"]["username"],
+                            song_details
+                        )
+                        
+                        if add_queue_result:
+                            songs_processed += 1
+                            logger.info("event.tip.song.request.queue.success",
+                                      message="Successfully added song to queue",
+                                      data={
+                                          "song_details": song_details,
+                                          "uri": song_uri,
+                                          "username": event["user"]["username"]
+                                      })
+                        else:
+                            logger.error("event.tip.song.request.queue.failed",
+                                       message="Failed to add song to queue",
+                                       data={
+                                           "song_info": str(song_info),
+                                           "uri": song_uri
+                                       })
+
+                    if songs_processed == 0:
+                        logger.warning("event.tip.song.request.allfailed",
+                                     message="Failed to process any songs from request",
+                                     data={
+                                         "message": tip_message,
+                                         "tip_amount": tip_amount,
+                                         "requested_count": request_count
+                                     })
 
             if 'spray_bottle' in self.active_components:
-                logger.info("event.tip.spray", message="Checking if spray bottle tip")
+                logger.debug("event.tip.spray.check",
+                           message="Checking for spray bottle tip",
+                           data={"tip_amount": tip_amount})
                 
                 if self.checks.is_spray_bottle_tip(tip_amount):
-                    logger.info("event.tip.spray", message="Spray bottle tip detected")
+                    logger.info("event.tip.spray.detected",
+                              message="Spray bottle tip detected",
+                              data={"tip_amount": tip_amount})
+                    
                     spray_bottle_result = self.actions.trigger_spray_bottle()
-                    logger.debug("event.tip.spray", data={"result": spray_bottle_result})
+                    logger.debug("event.tip.spray.result",
+                               message="Spray bottle trigger complete",
+                               data={"success": spray_bottle_result})
             
             return True
             
         except Exception as exc:
-            logger.exception("event.tip.error", exc=exc,
-                           message="Error processing tip event")
+            logger.exception("event.tip.error",
+                           message="Error processing tip event",
+                           exc=exc,
+                           data={
+                               "event": event,
+                               "error_type": type(exc).__name__
+                           })
             return False
     
     def broadcast_start(self, event):

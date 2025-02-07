@@ -1,8 +1,17 @@
+import datetime
+from datetime import datetime as DateTime
+import logging
 from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz
 import requests
 import base64
+
+from chatdj.chatdj import SongRequest
+
+
+from chatdj.chatdj import SongRequest
+
 
 from utils.structured_logging import get_structured_logger
 from helpers.checks import Checks  # Import the Checks class instead of individual method
@@ -16,9 +25,13 @@ class HTTPRequestHandler:
         try:
             response = requests.post(url, data=data, auth=auth)
             if response.status_code == 200:
-                logger.info("http.request.success",
-                          message="Request successful",
-                          data={"response": response.json() if response.text else None})
+                if response.text:
+                    try:
+                        logger.info(f"Success: {response.json()}")
+                    except ValueError:
+                        logger.info(f"Success: {response.text}")
+                else:
+                    logger.info("Success: No response body")
                 return True
             else:
                 logger.error("http.request.error",
@@ -77,16 +90,17 @@ class Actions(HTTPRequestHandler):
         if self.chatdj_enabled:
             logger.debug("actions.chatdj.init", message="Initializing ChatDJ")
             from chatdj import SongExtractor, AutoDJ
-            from . import song_cache_collection
+            from . import spotify_client, song_cache_collection
 
-            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"))
-            self.auto_dj = AutoDJ(
-                config.get("Spotify", "client_id"),
-                config.get("Spotify", "client_secret"),
-                config.get("Spotify", "redirect_url")
-            )
+            self.song_extractor = SongExtractor(config.get("OpenAI", "api_key"), spotify_client)
+            self.auto_dj = AutoDJ(spotify_client)
             self.song_cache_collection = song_cache_collection
         
+
+        if self.custom_actions_enabled:
+            from . import user_collection
+            self.user_collection = user_collection
+
         if self.spray_bottle_enabled:
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
             logger.debug("actions.spray.init",
@@ -152,23 +166,6 @@ class Actions(HTTPRequestHandler):
                            message="Failed to cache song")
             return False
 
-    def _custom_score(self, query_artist: str, query_song: str, result_artist: str, result_song: str) -> float:
-        """Calculate a custom matching score for artist and song."""
-        artist_ratio = fuzz.ratio(query_artist.lower(), result_artist.lower())
-        song_ratio = fuzz.ratio(query_song.lower(), result_song.lower())
-        
-        artist_score = 100 if artist_ratio == 100 else artist_ratio * 0.5
-        combined_score = (artist_score * 0.7) + (song_ratio * 0.3)
-        
-        logger.debug("song.match.score",
-                    message="Calculated match score",
-                    data={
-                        "artist_ratio": artist_ratio,
-                        "song_ratio": song_ratio,
-                        "combined_score": combined_score
-                    })
-        return combined_score
-
     def extract_song_titles(self, message: str, song_count: int) -> List[Dict[str, str]]:
         """Extract song titles from a message."""
         if not self.chatdj_enabled:
@@ -190,59 +187,19 @@ class Actions(HTTPRequestHandler):
                            message="Failed to get playback state")
             return False
 
-    def find_song_spotify(self, song_info: Dict[str, str]) -> Optional[str]:
-        """Find a song on Spotify, using cache if available."""
+    def find_song_spotify(self, song_info: SongRequest) -> Optional[str]:
+        """Return the spotify_uri provided in the song_info."""
         if not self.chatdj_enabled:
             logger.warning("chatdj.disabled",
                          message="Cannot search for song - ChatDJ is not enabled")
             return None
-
-        cached_song = self.get_cached_song(song_info)
-        if cached_song:
-            logger.info("cache.song.hit",
-                       message="Found song in cache",
-                       data={"song_info": song_info})
-            return cached_song['optimized_results'][0]['uri']
-
-        try:
-            tracks = self.auto_dj.find_song(song_info)['tracks']
-            if not tracks or not tracks['items']:
-                logger.warning("spotify.search.empty",
-                             message="No tracks found",
-                             data={"song_info": song_info})
-                return None
-
-            results = []
-            for track in tracks['items'][:20]:
-                artist_name = track['artists'][0]['name']
-                song_name = track['name']
-                score = self._custom_score(song_info['artist'], song_info['song'], 
-                                        artist_name, song_name)
-                results.append({
-                    'uri': track['uri'],
-                    'artist': artist_name,
-                    'song': song_name,
-                    'match_ratio': score
-                })
-
-            optimized_results = sorted(results, key=lambda x: x['match_ratio'], reverse=True)[:5]
-            logger.debug("spotify.search.results",
-                        message="Found matching tracks",
-                        data={"matches": optimized_results})
-
-            if self.cache_song(song_info, optimized_results):
-                logger.info("cache.song.add",
-                          message="Cached search results",
-                          data={"song_info": song_info})
-            else:
-                logger.warning("cache.song.error",
-                             message="Failed to cache search results",
-                             data={"song_info": song_info})
-
-            return optimized_results[0]['uri']
-        except Exception as exc:
-            logger.exception("spotify.search.error", exc=exc,
-                           message="Failed to search for song")
+        
+        search_result = self.auto_dj.search_track_uri(song_info.song, song_info.artist)
+        if search_result:
+            logger.debug(f"Search result: {search_result}")
+            return search_result
+        else:
+            logger.warning("No Spotify URI found for song.")
             return None
 
     def available_in_market(self, song_uri: str) -> bool:
@@ -300,27 +257,37 @@ class Actions(HTTPRequestHandler):
         """Skip the currently playing song."""
         if not self.chatdj_enabled:
             logger.warning("chatdj.disabled",
-                         message="Cannot skip song - ChatDJ is not enabled")
+                         message="Cannot skip song - ChatDJ is not enabled",
+                         data={"component": "chatdj"})
             return False
 
-        logger.info("spotify.playback.skip", message="Skipping current song")
+        logger.info("spotify.playback.skip",
+                   message="Skipping current song",
+                   data={"component": "chatdj"})
         try:
             return self.auto_dj.skip_song()
         except Exception as exc:
-            logger.exception("spotify.playback.error", exc=exc,
-                           message="Failed to skip song")
+            logger.exception("spotify.playback.error",
+                           message="Failed to skip song",
+                           exc=exc,
+                           data={"component": "chatdj"})
             return False
     
     def trigger_spray(self) -> bool:
         """Trigger the spray bottle action."""
-        logger.info("spray.trigger", message="Triggering spray bottle")
+        logger.info("spray.trigger",
+                   message="Triggering spray bottle",
+                   data={"url": self.spray_bottle_url})
         return self.make_request(self.spray_bottle_url, {"sprayAction": True})
     
     def trigger_couch_buzzer(self, duration=1) -> bool:
         """Trigger the couch buzzer action."""
         logger.info("buzzer.trigger",
                    message="Triggering couch buzzer",
-                   data={"duration": duration})
+                   data={
+                       "duration": duration,
+                       "url": self.couch_buzzer_url
+                   })
         
         credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
@@ -332,25 +299,29 @@ class Actions(HTTPRequestHandler):
     def _ensure_obs_connected(self) -> bool:
         """Ensure OBS is connected, attempting to connect if not."""
         if not self.obs_integration_enabled:
-            logger.warning("actions.obs.disabled",
-                         message="Cannot connect - OBS integration is not enabled")
+            logger.warning("obs.disabled",
+                         message="Cannot connect - OBS integration is not enabled",
+                         data={"component": "obs"})
             return False
             
         if not hasattr(self, 'obs') or not self.obs:
-            logger.error("actions.obs.error",
-                        message="OBS handler not initialized")
+            logger.error("obs.error",
+                        message="OBS handler not initialized",
+                        data={"component": "obs"})
             return False
             
         try:
             if not self.obs._connected:
-                logger.info("actions.obs.connect",
-                          message="Attempting to connect to OBS")
+                logger.info("obs.connect",
+                          message="Attempting to connect to OBS",
+                          data={"component": "obs"})
                 return self.obs.connect_sync()
             return True
         except Exception as exc:
-            logger.error("actions.obs.error",
+            logger.error("obs.error",
                         message="Failed to connect to OBS",
-                        data={"error": str(exc)})
+                        exc=exc,
+                        data={"component": "obs"})
             return False
 
     def set_scene(self, scene_key: str) -> bool:
@@ -392,3 +363,18 @@ class Actions(HTTPRequestHandler):
                          message="OBS integration is not enabled")
             return
         self.obs.trigger_song_requester_overlay_sync(requester_name, song_details, display_duration)
+    
+    def get_last_vip_audio_play(self, user: str) -> Optional[DateTime]:
+        """Get the last VIP audio play time for a user."""
+        user_data = self.user_collection.find_one({"username": user})
+        if not user_data:
+            logger.warning(f"User {user} not found.")
+            return None
+        return user_data.get("last_vip_audio_play")
+    
+    def set_last_vip_audio_play(self, user: str, timestamp: DateTime) -> bool:
+        """Set the last VIP audio play time for a user."""
+        return self.user_collection.update_one(
+            {"username": user},
+            {"$set": {"last_vip_audio_play": timestamp}}
+        )

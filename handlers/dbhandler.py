@@ -109,20 +109,30 @@ class DBHandler:
     def archive_event(self, event):
         try:
             event['timestamp'] = datetime.datetime.now(tz=datetime.timezone.utc)
-            logger.debug("event.archive.timestamp",
-                        message="Added timestamp to event",
-                        data={"timestamp": event['timestamp']})
+            logger.debug("event.archive",
+                        message="Archiving event",
+                        data={
+                            "timestamp": event['timestamp'],
+                            "event_type": event.get('method'),
+                            "event_id": str(event.get('_id', ''))
+                        })
                         
             result = self.event_collection.insert_one(event)
-            logger.debug("event.archive.success",
-                        message="Archived event",
-                        data={"document_id": str(result.inserted_id)})
+            logger.info("event.archive.success",
+                       message="Archived event",
+                       data={
+                           "document_id": str(result.inserted_id),
+                           "event_type": event.get('method')
+                       })
                         
         except Exception as exc:
             logger.exception("event.archive.error",
-                           exc=exc,
                            message="Failed to archive event",
-                           data={"event": event})
+                           exc=exc,
+                           data={
+                               "event_type": event.get('method'),
+                               "event_id": str(event.get('_id', ''))
+                           })
 
     def event_processor(self):
         """
@@ -138,8 +148,8 @@ class DBHandler:
                 continue  # Resume loop if no event and check for stop signal
             except Exception as exc:
                 logger.exception("event.process.error",
-                               exc=exc,
-                               message="Failed to process event")
+                               message="Failed to process event",
+                               exc=exc)
 
     def long_polling(self):
         """
@@ -151,7 +161,10 @@ class DBHandler:
             try:
                 logger.debug("api.poll",
                            message="Polling events API",
-                           data={"url": url_next})
+                           data={
+                               "url": url_next,
+                               "interval": self.interval
+                           })
                            
                 response = requests.get(url_next)
                 if response.status_code == 200:
@@ -160,7 +173,8 @@ class DBHandler:
                               message="Retrieved events from API",
                               data={
                                   "event_count": len(data["events"]),
-                                  "next_url": data["nextUrl"]
+                                  "next_url": data["nextUrl"],
+                                  "status_code": response.status_code
                               })
                               
                     for event in data["events"]:
@@ -169,12 +183,16 @@ class DBHandler:
                 else:
                     logger.error("api.poll.error",
                                message="Failed to retrieve events",
-                               data={"status_code": response.status_code})
+                               data={
+                                   "status_code": response.status_code,
+                                   "url": url_next
+                               })
                                
             except RequestException as exc:
                 logger.exception("api.poll.error",
+                               message="Failed to poll events API",
                                exc=exc,
-                               message="Failed to poll events API")
+                               data={"url": url_next})
 
             time.sleep(self.interval)
 

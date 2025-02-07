@@ -204,7 +204,7 @@ class EventHandler:
     def song_queue_check(self):
         """Continuously check the song queue status."""
         while not self._stop_event.is_set():
-            self.cb_events.actions.auto_dj.check_queue_status()
+            song_queue_status = self.cb_events.actions.auto_dj.check_queue_status()
             time.sleep(5)
         # One final check in silent mode during shutdown
         try:

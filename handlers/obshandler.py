@@ -51,26 +51,26 @@ class OBSHandler:
             scenes_file = Path(__file__).parent.parent / 'scenes.yaml'
             with open(scenes_file, 'r') as f:
                 config = yaml.safe_load(f)
+                logger.debug("obs.scenes.load",
+                           message="Loaded scene definitions",
+                           data={"file": str(scenes_file)})
                 return config.get('scenes', {})
         except Exception as exc:
             logger.exception("obs.scenes.error",
+                           message="Failed to load scene definitions",
                            exc=exc,
-                           message="Failed to load scene definitions")
+                           data={"file": str(scenes_file)})
             return None
 
     def _get_scene_name(self, scene_key: str) -> Optional[str]:
-        """Get the actual scene name from scene key.
-        
-        Args:
-            scene_key: Key of the scene in the YAML config
-            
-        Returns:
-            Actual scene name or None if not found
-        """
+        """Get the actual scene name from scene key."""
         if not self.scenes or scene_key not in self.scenes:
             logger.warning("obs.scene.notfound",
                          message="Scene key not found",
-                         data={"scene_key": scene_key})
+                         data={
+                             "scene_key": scene_key,
+                             "available_scenes": list(self.scenes.keys()) if self.scenes else []
+                         })
             return None
         return self.scenes[scene_key]['name']
 

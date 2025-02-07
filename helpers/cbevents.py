@@ -131,47 +131,33 @@ class CBEvents:
                     if self.actions.is_playback_active():
                         logger.info("event.tip.song.skip", message="Executing skip song")
                         skip_song_result = self.actions.skip_song()
-                        logger.debug("event.tip.song.skip", data={"result": skip_song_result})
-                
-                logger.info("event.tip.song", message="Checking if song request")
-                
-                if self.checks.is_song_request(tip_amount):
-                    logger.info("event.tip.song.request", message="Song request detected")
-                    
-                    request_count = self.checks.get_request_count(tip_amount)
-                    logger.info("event.tip.song.request", 
-                              message="Processing song request",
-                              data={"request_count": request_count})
-                    
-                    song_extracts = self.actions.extract_song_titles(event.get('tip', {}).get('message', ''), request_count)
-                    logger.debug("event.tip.song.request", data={"song_extracts": song_extracts})
-                    
-                    song_uri = self.actions.find_song_spotify(song_extracts[0] if song_extracts else None)
-                    logger.debug("event.tip.song.request", data={"song_uri": song_uri})
-                    
-                    if not self.actions.available_in_market(song_uri):
-                        logger.warning("event.tip.song.error", 
-                                     message="Song not available in user market",
-                                     data={"song_info": song_extracts})
-                        return True
-                    
-                    # Get requester name from the event
-                    requester_name = event.get('user', {}).get('username', 'Anonymous')
-                    # Get song details from the first extracted song
-                    song_details = f"{song_extracts[0]['artist']} - {song_extracts[0]['song']}" if song_extracts else "Unknown Song"
-                    
-                    add_queue_result = self.actions.add_song_to_queue(song_uri, requester_name, song_details)
-                    logger.debug("event.tip.song.queue", data={"result": add_queue_result})
-                    
-                    if not add_queue_result:
-                        logger.error("event.tip.song.error",
-                                   message="Failed to add song to queue",
-                                   data={"song_info": song_extracts})
-                    else:
-                        logger.info("event.tip.song.queue",
-                                  message="Song added to queue",
-                                  data={"song_info": song_extracts})
-            
+                        logger.debug(f'skip_song_result: {skip_song_result}')
+
+                logger.info("Checking if song request.")
+                if self.checks.is_song_request(event["tip"]["tokens"]):
+                    logger.info("Song request detected.")
+                    request_count = self.checks.get_request_count(event["tip"]["tokens"])
+                    logger.info(f"Request count: {request_count}")
+                    song_extracts = self.actions.extract_song_titles(event["tip"]["message"], request_count)
+                    logger.debug(f'song_extracts:  {song_extracts}')
+                    for song_info in song_extracts:
+                        if song_info.spotify_uri:
+                            song_uri = song_info.spotify_uri
+                        else:
+                            song_uri = self.actions.find_song_spotify(song_info)
+                        logger.debug(f'song_uri: {song_uri}')
+                        if song_uri:
+                            if not self.actions.available_in_market(song_uri):
+                                logger.warning(f"Song not available in user market: {song_info}")
+                                continue
+                            song_details = f"{song_info.artist} - {song_info.song}"
+                            add_queue_result = self.actions.add_song_to_queue(song_uri, event["user"]["username"], song_details)
+                            logger.debug(f'add_queue_result: {add_queue_result}')
+                            if not add_queue_result:
+                                logger.error(f"Failed to add song to queue: {song_info}")
+                            else:
+                                logger.info(f"Song added to queue: {song_info}")
+
             if 'spray_bottle' in self.active_components:
                 logger.info("event.tip.spray", message="Checking if spray bottle tip")
                 
@@ -372,13 +358,9 @@ class CBEvents:
                               data={"username": username})
                     
                     current_time = time.time()
-                    last_entry = self.vip_cooldown.get(username, 0)
-                    
-                    if current_time - last_entry > self.vip_audio_cooldown_seconds:
-                        logger.info("event.user.enter.vip.audio",
-                                  message="Playing VIP audio",
-                                  data={"username": username})
-                        
+                    last_vip_audio_play = self.actions.get_last_vip_audio_play(username)
+                    if not last_vip_audio_play or (current_time - last_vip_audio_play) > self.vip_audio_cooldown_seconds:
+                        logger.info(f"VIP user {username} not in cooldown period. Playing user audio.")    
                         audio_file = vip_users[username]
                         logger.debug("event.user.enter.vip.audio",
                                    data={"audio_file": audio_file})
@@ -388,12 +370,11 @@ class CBEvents:
                                    data={"audio_file_path": audio_file_path})
                         
                         self.audio_player.play_audio(audio_file_path)
-                        logger.info("event.user.enter.vip.audio",
-                                  message="VIP audio played, resetting cooldown",
-                                  data={"username": username})
-                        
-                        self.vip_cooldown[username] = current_time
-            
+                        logger.info(f"VIP audio played for user: {username}. Resetting cooldown.")
+                        if not self.actions.set_last_vip_audio_play(username, current_time):
+                            logger.error(f"Failed to set last VIP audio play time for user: {username}")
+
+
             return True
             
         except Exception as exc:

@@ -222,39 +222,65 @@ class AsyncElasticsearchHandler(logging.Handler):
     def _serialize_record(self, record):
         """Serialize a record, handling MongoDB types."""
         try:
-            # Prepare the document
+            # Prepare the document with new format
             doc = {
                 '@timestamp': datetime.datetime.utcnow().isoformat(),
-                'host': self.hostname,
-                'level': record.levelname,
-                'logger': record.name,
-                'message': record.getMessage(),
-                'path': record.pathname,
-                'function': record.funcName,
-                'line_number': record.lineno,
-                'process': {
-                    'id': record.process,
-                    'name': record.processName
+                'log': {
+                    'level': record.levelname,
+                    'logger': record.name,
+                    'origin': {
+                        'file': {
+                            'name': record.pathname,
+                            'line': record.lineno
+                        },
+                        'function': record.funcName
+                    }
                 },
-                'thread': {
-                    'id': record.thread,
-                    'name': record.threadName
-                }
+                'process': {
+                    'pid': record.process,
+                    'name': record.processName,
+                    'thread': {
+                        'id': record.thread,
+                        'name': record.threadName
+                    }
+                },
+                'host': {
+                    'name': self.hostname,
+                    'architecture': sys.platform
+                },
+                'message': record.getMessage()
             }
             
             # Add exception info if present
             if record.exc_info:
-                doc['exception'] = {
+                doc['error'] = {
                     'type': str(record.exc_info[0].__name__),
                     'message': str(record.exc_info[1]),
-                    'traceback': self.formatter.formatException(record.exc_info)
+                    'stack_trace': self.formatter.formatException(record.exc_info)
                 }
             
-            # Add extra fields if present
+            # Add structured logging fields
             if hasattr(record, 'event_type'):
-                doc['event_type'] = record.event_type
+                doc['event'] = {
+                    'type': record.event_type
+                }
+            
+            # Add any additional data fields
             if hasattr(record, 'data'):
                 doc['data'] = record.data
+            
+            # Add any extra fields from record
+            if hasattr(record, 'extra_fields'):
+                for key, value in record.extra_fields.items():
+                    if '.' in key:
+                        # Handle nested fields
+                        parts = key.split('.')
+                        current = doc
+                        for part in parts[:-1]:
+                            current = current.setdefault(part, {})
+                        current[parts[-1]] = value
+                    else:
+                        doc[key] = value
             
             return doc
         except Exception as e:

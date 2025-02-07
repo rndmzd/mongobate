@@ -225,8 +225,7 @@ mongobate/
 │   └── obshandler.py    # OBS integration
 ├── helpers/             # Helper modules
 │   ├── actions.py       # Action processing
-│   ├── checks.py        # Validation functions
-│   └── eventprocessor.py # Event processing logic
+│   └── checks.py        # Validation functions
 ├── chatdj/             # Spotify integration
 │   └── chatdj.py       # Auto DJ implementation
 ├── chataudio/          # Audio handling

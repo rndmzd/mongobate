@@ -314,28 +314,25 @@ class OBSHandler:
             'sourceName': source_name
         })
         
-        if not id_response:
+        # GetSceneItemId must return a valid ID
+        if not id_response or 'sceneItemId' not in id_response:
             logger.error("obs.source.error",
                         message="Failed to get scene item ID",
                         data={"source": source_name})
             return False
             
-        scene_item_id = id_response.get('sceneItemId')
-        if scene_item_id is None:
-            logger.error("obs.source.notfound",
-                        message="Scene item ID not found",
-                        data={"source": source_name})
-            return False
+        scene_item_id = id_response['sceneItemId']
             
         # Then set the visibility using the ID
-        response = await self.send_request('SetSceneItemEnabled', {
-            'sceneName': scene_name,
-            'sceneItemId': scene_item_id,
-            'sceneItemEnabled': visible
-        })
-        
-        success = response is not None
-        if success:
+        try:
+            # For SetSceneItemEnabled, any non-error response (including None) means success
+            await self.send_request('SetSceneItemEnabled', {
+                'sceneName': scene_name,
+                'sceneItemId': scene_item_id,
+                'sceneItemEnabled': visible
+            })
+            
+            # If we got here, the request succeeded (no exception was raised)
             logger.info("obs.source.visibility.success",
                        message="Set source visibility",
                        data={
@@ -343,16 +340,19 @@ class OBSHandler:
                            "source": source_name,
                            "visible": visible
                        })
-        else:
-            logger.error("obs.source.visibility.error",
-                        message="Failed to set source visibility",
-                        data={
-                            "scene": scene_name,
-                            "source": source_name,
-                            "visible": visible
-                        })
-        
-        return success
+            return True
+            
+        except Exception as exc:
+            logger.exception("obs.source.visibility.error",
+                           message="Failed to set source visibility",
+                           exc=exc,
+                           data={
+                               "scene": scene_name,
+                               "source": source_name,
+                               "visible": visible,
+                               "error_type": type(exc).__name__
+                           })
+            return False
 
     async def get_source_visibility(self, scene_key: str, source_name: str) -> Optional[bool]:
         """Get the visibility state of a source in a scene.
@@ -423,37 +423,56 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
-        logger.debug("obs.overlay.show",
-                    message="Showing song requester overlay",
-                    data={
-                        "requester": requester_name,
-                        "song": song_details
-                    })
-        
-        request_content = {
-            'inputName': 'SongRequester',
-            'inputSettings': {
-                'text': f'Song requested by {requester_name}\n{song_details}'
-            }
-        }
-        logger.debug("obs.overlay.show.request",
-                    message="Sending request to set input settings",
-                    data={"request": request_content})
-        await self.send_request('SetInputSettings', request_content)
-
-        await asyncio.sleep(1)
-
-        success = True
-        success &= await self.set_source_visibility('main', 'SongRequester', True)
-
-        if success:
-            logger.info("obs.overlay.show.success",
-                       message="Song requester overlay shown")
-        else:
-            logger.error("obs.overlay.show.error",
-                        message="Failed to show song requester overlay")
+        try:
+            logger.debug("obs.overlay.show",
+                        message="Showing song requester overlay",
+                        data={
+                            "requester": requester_name,
+                            "song": song_details
+                        })
             
-        return success
+            request_content = {
+                'inputName': 'SongRequester',
+                'inputSettings': {
+                    'text': f'Song requested by {requester_name}\n{song_details}'
+                }
+            }
+            logger.debug("obs.overlay.show.request",
+                        message="Sending request to set input settings",
+                        data={"request": request_content})
+                        
+            try:
+                # SetInputSettings returns None on success
+                await self.send_request('SetInputSettings', request_content)
+                text_success = True
+            except Exception:
+                text_success = False
+
+            await asyncio.sleep(1)
+
+            visibility_success = await self.set_source_visibility('main', 'SongRequester', True)
+
+            if text_success and visibility_success:
+                logger.info("obs.overlay.show.success",
+                           message="Song requester overlay shown")
+                return True
+                
+            logger.error("obs.overlay.show.error",
+                        message="Failed to show song requester overlay",
+                        data={
+                            "text_success": text_success,
+                            "visibility_success": visibility_success
+                        })
+            return False
+            
+        except Exception as exc:
+            logger.exception("obs.overlay.show.error",
+                           message="Failed to show song requester overlay",
+                           exc=exc,
+                           data={
+                               "error_type": type(exc).__name__
+                           })
+            return False
 
     async def hide_song_requester(self) -> bool:
         """Hide the song requester overlay.
@@ -461,33 +480,49 @@ class OBSHandler:
         Returns:
             True if successful, False otherwise
         """
-        logger.debug("obs.overlay.hide",
-                    message="Hiding song requester overlay")
-        
-        success = True
-        success &= await self.set_source_visibility('main', 'SongRequester', False)
-        
-        if success:
-            logger.info("obs.overlay.hide.success",
-                       message="Song requester overlay hidden")
-        else:
-            logger.error("obs.overlay.hide.error",
-                        message="Failed to hide song requester overlay")
-        
-        await asyncio.sleep(1)
-        
-        request_content = {
-            'inputName': 'SongRequester',
-            'inputSettings': {
-                'text': ''
-            }
-        }
-        logger.debug("obs.overlay.hide.request",
-                    message="Sending request to set input settings",
-                    data={"request": request_content})
-        await self.send_request('SetInputSettings', request_content)
+        try:
+            logger.debug("obs.overlay.hide",
+                        message="Hiding song requester overlay")
             
-        return success
+            visibility_success = await self.set_source_visibility('main', 'SongRequester', False)
+            
+            if visibility_success:
+                logger.info("obs.overlay.hide.success",
+                           message="Song requester overlay hidden")
+            else:
+                logger.error("obs.overlay.hide.error",
+                           message="Failed to hide song requester overlay",
+                           data={"visibility_success": visibility_success})
+            
+            await asyncio.sleep(1)
+            
+            request_content = {
+                'inputName': 'SongRequester',
+                'inputSettings': {
+                    'text': ''
+                }
+            }
+            logger.debug("obs.overlay.hide.request",
+                        message="Sending request to set input settings",
+                        data={"request": request_content})
+                        
+            try:
+                # SetInputSettings returns None on success
+                await self.send_request('SetInputSettings', request_content)
+                text_success = True
+            except Exception:
+                text_success = False
+            
+            return visibility_success and text_success
+            
+        except Exception as exc:
+            logger.exception("obs.overlay.hide.error",
+                           message="Failed to hide song requester overlay",
+                           exc=exc,
+                           data={
+                               "error_type": type(exc).__name__
+                           })
+            return False
 
     async def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
         """Show the song requester overlay for a specified duration.
@@ -526,23 +561,59 @@ class OBSHandler:
         
         Args:
             coro: Coroutine to run
+            
+        Returns:
+            Result of the coroutine or None if it failed
         """
         try:
             # If we're in a running event loop, use run_coroutine_threadsafe
             if self.loop.is_running():
                 logger.debug("obs.sync.run",
                            message="Using run_coroutine_threadsafe")
+                           
+                # For trigger_song_requester_overlay, use a longer timeout
+                # that accounts for display duration
+                timeout = 30  # Default timeout
+                if isinstance(coro, asyncio.Task):
+                    coro_name = coro.get_name()
+                else:
+                    coro_name = coro.__name__
+                    
+                if 'trigger_song_requester_overlay' in coro_name:
+                    # Add 5 seconds to display_duration for setup/cleanup
+                    display_duration = coro.cr_frame.f_locals.get('display_duration', 10)
+                    timeout = display_duration + 5
+                    
+                logger.debug("obs.sync.timeout",
+                           message="Setting coroutine timeout",
+                           data={
+                               "coroutine": coro_name,
+                               "timeout": timeout
+                           })
+                           
                 future = asyncio.run_coroutine_threadsafe(coro, self.loop)
-                return future.result(timeout=10)  # 10 second timeout
+                return future.result(timeout=timeout)
             else:
                 # If loop isn't running, use run_until_complete
                 logger.debug("obs.sync.run",
                            message="Using run_until_complete")
                 return self.loop.run_until_complete(coro)
+                
+        except asyncio.TimeoutError as exc:
+            logger.error("obs.sync.timeout",
+                        message="Coroutine timed out",
+                        data={
+                            "coroutine": coro_name if 'coro_name' in locals() else str(coro),
+                            "timeout": timeout if 'timeout' in locals() else 'unknown'
+                        })
+            return None
         except Exception as exc:
             logger.exception("obs.sync.error",
                            exc=exc,
-                           message="Error running coroutine")
+                           message="Error running coroutine",
+                           data={
+                               "coroutine": coro_name if 'coro_name' in locals() else str(coro)
+                           })
             return None
 
     def connect_sync(self) -> bool:

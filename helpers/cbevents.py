@@ -55,13 +55,13 @@ class CBEvents:
 
             # Map event methods to handler methods
             method_map = {
-                'chatMessage': lambda obj: self.chat_message(obj, privileged_users.get('admin_users', []), privileged_users.get('action_users', {})),
-                'privateMessage': lambda obj: self.private_message(obj, privileged_users.get('admin_users', []), privileged_users.get('action_users', {})),
+                'chatMessage': lambda obj: self.chat_message(obj, privileged_users.get('admin', []), privileged_users.get('custom_actions', {})),
+                'privateMessage': lambda obj: self.private_message(obj, privileged_users.get('admin', []), privileged_users.get('custom_actions', {})),
                 'tip': lambda obj: self.tip(obj),
                 'broadcastStart': lambda obj: self.broadcast_start(obj),
                 'broadcastStop': lambda obj: self.broadcast_stop(obj),
                 'fanclubJoin': lambda obj: self.fanclub_join(obj),
-                'userEnter': lambda obj: self.user_enter(obj, privileged_users.get('vip_users', {})),
+                'userEnter': lambda obj: self.user_enter(obj, privileged_users.get('vip', {})),
                 'userLeave': lambda obj: self.user_leave(obj),
                 'follow': lambda obj: self.follow(obj),
                 'unfollow': lambda obj: self.unfollow(obj),

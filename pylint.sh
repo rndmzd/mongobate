@@ -13,4 +13,4 @@ FILES=(
 )
 
 # Run pylint with the selected files/directories.
-pylint --pylintrc .pylintrc "${FILES[@]}"
+pylint --pylintrc .pylintrc --verbose --jobs 0 "${FILES[@]}"

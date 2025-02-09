@@ -355,7 +355,7 @@ class AutoDJ:
         logger.debug("Prompting user for playback device selection.")
         self.playback_device = self._select_playback_device()
         
-        logger.debug("spotify.playback", message="Initializing playback state")
+        logger.debug("spotify.playback.init", message="Initializing playback state")
         self.playing_first_track = False
 
         self.queued_tracks = []
@@ -396,9 +396,11 @@ class AutoDJ:
                     logger.error("spotify.device.error",
                                message="Invalid device selection")
                     print("Invalid selection. Please try again.")
-                    sys.exit()
         except Exception as e:
-            logger.exception("Failed to select playback device", exc_info=e)
+            logger.exception("spotify.device.error",
+                            message="Failed to select playback device",
+                            exc=e)
+
             raise
 
     def search_track_uri(self, song: str, artist: str) -> Optional[str]:
@@ -429,13 +431,18 @@ class AutoDJ:
                     if artist.strip().lower() in track_artists:
                         filtered_tracks.append(track)
             if not filtered_tracks:
-                logger.warning(f"No matching track found for {artist} - {song}")
+                logger.warning("spotify.search.no_match",
+                               message=f"No matching track found for {artist} - {song}")
                 return None
             best_track = max(filtered_tracks, key=lambda x: x.get('popularity', 0))
             return best_track.get('uri')
-        except SpotifyException as e:
-            logger.exception("Failed to search for track", exc_info=e)
+
+        except SpotifyException as exc:
+            logger.exception("spotify.search.error",
+                            message="Failed to search for track",
+                            exc=exc)
             return None
+
 
     def add_song_to_queue(self, track_uri: str, silent=False) -> bool:
         try:
@@ -463,14 +470,18 @@ class AutoDJ:
         try:
             if not self.playback_active():
                 if len(self.queued_tracks) > 0:
-                    logger.info("Queue populated but playback is not active. Starting playback.")
+                    logger.info("queue.check.start",
+                                message="Queue populated but playback is not active. Starting playback.")
                     popped_track = self.queued_tracks.pop(0)
-                    logger.debug(f"Popped track: {popped_track}")
+                    logger.debug("queue.check.popped",
+                                message=f"Popped track: {popped_track}")
                     self.spotify.start_playback(device_id=self.playback_device, uris=[popped_track])
-                    logger.debug("Clearing playing_first_track flag.")
+                    logger.debug("queue.check.playing_first_track",
+                                message="Clearing playing_first_track flag.")
                     self.playing_first_track = False
                     return True
                 self._print_variables(False)
+
                 return False
 
             if self.queued_tracks:
@@ -481,9 +492,12 @@ class AutoDJ:
                     self.queued_tracks.pop(0)
             self._print_variables(True)
             return True
-        except SpotifyException as e:
-            logger.exception("Failed to check queue status", exc_info=e)
+        except SpotifyException as exc:
+            logger.exception("queue.check.error",
+                            message="Failed to check queue status",
+                            exc=exc)
             return False
+
 
     def clear_playback_context(self) -> bool:
         try:
@@ -496,36 +510,53 @@ class AutoDJ:
             while True:
                 queue = self.spotify.queue()
                 if len(queue['queue']) == 0:
-                    print("Queue is now empty")
+                    logger.info("queue.clear.empty",
+                                message="Queue is now empty")
                     break
                 current_track = queue['queue'][0]['uri']
                 if current_track == previous_track:
+
                     attempts += 1
                     if attempts >= max_attempts:
-                        print("Unable to clear the last track. Stopping.")
+                        logger.info("queue.clear.max_attempts",
+                                    message="Unable to clear the last track. Stopping.")
                         break
                 else:
+
                     attempts = 0
                 try:
                     self.spotify.next_track()
-                    print(f"Skipped track: {queue['queue'][0]['name']}")
+                    logger.info("queue.clear.skipped",
+                                message=f"Skipped track: {queue['queue'][0]['name']}")
                     time.sleep(1)
-                except SpotifyException as e:
-                    logger.error(f"Error skipping track: {e}")
+                except SpotifyException as exc:
+                    logger.error("queue.clear.error",
+                                message=f"Error skipping track: {exc}")
                     break
+
                 previous_track = current_track
+
             try:
                 self.spotify.pause_playback()
-                logger.info("Playback paused.")
-            except SpotifyException as e:
-                logger.error(f"Error pausing playback: {e}")
+                logger.info("queue.clear.pause",
+                            message="Playback paused.")
+            except SpotifyException as exc:
+                logger.error("queue.clear.error",
+                            message=f"Error pausing playback: {exc}")
             self.playing_first_track = False
+
             self.queued_tracks.clear()
             self._print_variables(True)
             return True
-        except SpotifyException as e:
-            logger.exception("Failed to clear playback context.", exc_info=e)
+
+
+        except SpotifyException as exc:
+            logger.exception("queue.clear.error",
+                            message="Failed to clear playback context.",
+                            exc=exc)
+
             return False
+
 
     def get_user_market(self) -> Optional[str]:
         try:

@@ -1,9 +1,6 @@
 import configparser
-import os
 import sys
-import time
 import asyncio
-import logging
 import signal
 
 from handlers import EventHandler
@@ -30,7 +27,10 @@ async def shutdown():
         # Now cleanup logging
         await cleanup_logging()
     except Exception as exc:
-        print(f"Error during shutdown: {exc}")
+        logger.error("app.error",
+                     message="Error during shutdown",
+                     data={"error": str(exc)})
+
 
 def handle_exception(loop, context):
     # Don't log if we're shutting down
@@ -128,17 +128,21 @@ async def main():
     finally:
         # Always perform cleanup in the finally block
         try:
-            print("\nShutting down...")
+            logger.info("app.shutdown", message="Shutting down...")
             # Set shutdown event first to prevent new logs
             shutdown_event.set()
             # Small delay to allow any pending logs to complete
             await asyncio.sleep(0.1)
             if event_handler:
+
                 await event_handler.stop()
             # Cleanup logging last
             await cleanup_logging()
         except Exception as exc:
-            print(f"Error during shutdown: {exc}", file=sys.stderr)
+            logger.error("app.error",
+                         message="Error during shutdown",
+                         data={"error": str(exc)})
+
 
 if __name__ == '__main__':
     try:
@@ -147,6 +151,8 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass  # Don't print anything, it's handled in main()
     except Exception as exc:
-        print(f"Error in main: {exc}")
+        logger.error("app.error",
+                     message="Error in main",
+                     data={"error": str(exc)})
     finally:
         pass  # Cleanup is handled in main()

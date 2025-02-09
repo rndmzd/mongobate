@@ -677,5 +677,7 @@ class CBEvents:
             
             return True
         except Exception as e:
-            logger.exception("Error processing chat message event", exc_info=e)
+            logger.exception("event.chat.message.error",
+                            message="Error processing chat message event",
+                            exc=e)
             return False

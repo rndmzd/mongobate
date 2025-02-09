@@ -1,0 +1,43 @@
+# OBS Scene Definitions Example
+scenes:
+  # Main broadcast scene: used when the stream is live.
+  main:
+    name: "Live"
+    description: "Main broadcast scene shown when the stream is active"
+    sources:
+      - name: "Camera"
+        type: "video_capture_device"
+        enabled: true
+      - name: "GameCapture"
+        type: "capture_card"
+        enabled: true
+
+  # Offline scene: used when the broadcast is stopped or during longer breaks.
+  offline:
+    name: "Offline"
+    description: "Scene shown when broadcast is stopped or during breaks"
+    sources:
+      - name: "StaticImage"
+        type: "image_source"
+        enabled: true
+
+  # Starting soon scene: shown before the broadcast starts.
+  starting:
+    name: "Live Soon"
+    description: "Scene shown before broadcast starts, often with a countdown overlay"
+    sources:
+      - name: "CountdownOverlay"
+        type: "browser_source"
+        enabled: true
+
+  # Technical difficulties scene: used to indicate issues during the stream.
+  technical:
+    name: "Technical"
+    description: "Scene shown during technical difficulties"
+    sources: []  # Configure sources as needed
+
+  # BRB scene: shown during short breaks while the broadcast remains live.
+  brb:
+    name: "BRB"
+    description: "Scene shown during short breaks"
+    sources: []  # Configure sources as needed

@@ -23,6 +23,12 @@ def main():
     # Retrieve Events API configuration
     events_api_url = config.get("Events API", "url")
     requests_per_minute = config.getint("Events API", "max_requests_per_minute")
+    
+    # Retrieve Stats API configuration
+    stats_api_url = config.get("Stats API", "url")
+
+    # Retrieve stats_collection from MongoDB config
+    stats_collection = config.get("MongoDB", "stats_collection")
 
     # Retrieve MongoDB configuration
     mongo_username = config.get("MongoDB", "username")
@@ -31,14 +37,21 @@ def main():
     mongo_port = config.getint("MongoDB", "port")
     mongo_db = config.get("MongoDB", "db")
 
-    # Try to get the proper collection name. Fallback to 'event_collection' if 'collection' is missing.
-    try:
-        mongo_collection = config.get("MongoDB", "collection")
-    except configparser.NoOptionError:
-        mongo_collection = config.get("MongoDB", "event_collection")
+    # Retrieve event collection from MongoDB config
+    event_collection = config.get("MongoDB", "event_collection")
+    
 
     # Read the replica set name from configuration; use "rs0" as default.
     replica_set = config.get("MongoDB", "replica_set", fallback="rs0")
+    
+    # Retrieve Rooms Online API configuration
+    rooms_api_url = config.get("Rooms Online API", "url")
+    rooms_request_ip = config.get("Rooms Online API", "request_ip")
+    rooms_limit = config.get("Rooms Online API", "room_count")
+    
+    # Retrieve rooms collection from MongoDB config
+    rooms_collection = config.get("MongoDB", "rooms_collection")
+
 
     logger.info("dbhandler.init",
                 message="Initializing database handler",
@@ -53,7 +66,9 @@ def main():
                         "host": mongo_host,
                         "port": mongo_port,
                         "db": mongo_db,
-                        "collection": mongo_collection
+                        "collection": event_collection,
+                        "stats_collection": stats_collection,
+                        "rooms_collection": rooms_collection
                     }
                 })
 
@@ -63,10 +78,16 @@ def main():
         mongo_host=mongo_host,
         mongo_port=mongo_port,
         mongo_db=mongo_db,
-        mongo_collection=mongo_collection,
+        events_collection=event_collection,
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute,
-        replica_set=replica_set
+        replica_set=replica_set,
+        stats_api_url=stats_api_url,
+        stats_collection=stats_collection,
+        rooms_api_url=rooms_api_url,
+        rooms_request_ip=rooms_request_ip,
+        rooms_limit=rooms_limit,
+        rooms_collection=rooms_collection
     )
 
     try:

@@ -50,10 +50,16 @@ class DBHandler:
             mongo_host,
             mongo_port,
             mongo_db,
-            mongo_collection,
+            events_collection,
             events_api_url,
             requests_per_minute=1000,
             replica_set="rs0",
+            stats_api_url=None,
+            stats_collection=None,
+            rooms_api_url=None,
+            rooms_request_ip=None,
+            rooms_limit=None,
+            rooms_collection=None,
             aws_key=None,
             aws_secret=None):
         self.mongo_username = mongo_username
@@ -61,8 +67,14 @@ class DBHandler:
         self.mongo_host = mongo_host
         self.mongo_port = mongo_port
         self.mongo_db = mongo_db
-        self.mongo_collection = mongo_collection
+        self.mongo_collection = events_collection
         self.events_api_url = events_api_url
+        self.stats_api_url = stats_api_url
+        self.stats_collection_name = stats_collection
+        self.rooms_api_url = rooms_api_url
+        self.rooms_request_ip = rooms_request_ip
+        self.rooms_limit = rooms_limit
+        self.rooms_collection_name = rooms_collection
         self.interval = 60 / (requests_per_minute / 10)
 
         self.event_queue = queue.Queue()
@@ -141,6 +153,10 @@ class DBHandler:
             # Do not overwrite self.mongo_db: store the actual Database object in a new attribute.
             self.db = self.mongo_client[self.mongo_db]
             self.event_collection = self.db[self.mongo_collection]
+            if self.stats_collection_name:
+                self.stats_collection = self.db[self.stats_collection_name]
+            if self.rooms_collection_name:
+                self.rooms_collection = self.db[self.rooms_collection_name]
         except ConnectionFailure as e:
             logger.exception("database.connection.failure", exc=e, message=f"Could not connect to MongoDB: {e}")
             raise
@@ -211,26 +227,68 @@ class DBHandler:
 
             time.sleep(self.interval)
 
-    def run(self):
-        logger.info("dbhandler.start",
-                   message="Starting database handler")
+    def stats_polling(self):
+        while not self._stop_event.is_set():
+            try:
+                response = requests.get(self.stats_api_url)
+                if response.status_code == 200:
+                    stats_data = response.json()
+                    stats_data['fetched_at'] = datetime.datetime.now(tz=datetime.timezone.utc)
+                    logger.info("stats.polling.success", message="Fetched stats", data=stats_data)
+                    self.stats_collection.insert_one(stats_data)
+                else:
+                    logger.error("stats.api.error", message="Received non-200 response", data={"status_code": response.status_code})
+            except Exception as exc:
+                logger.exception("stats.polling.error", message="Failed to fetch stats", exc=exc)
+            if self._stop_event.wait(300):
+                break
 
-        logger.debug("thread.processor.start",
-                    message="Starting event processor thread")
-        processor_thread = threading.Thread(
-            target=self.event_processor, args=(), daemon=True
-        )
+    def rooms_online_polling(self):
+        while not self._stop_event.is_set():
+            try:
+                constructed_url = f"{self.rooms_api_url}&client_ip={self.rooms_request_ip}&limit={self.rooms_limit}"
+                response = requests.get(constructed_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    for room in data.get("results", []):
+                        room['_id'] = room.get("username")
+                        room['fetched_at'] = datetime.datetime.now(tz=datetime.timezone.utc)
+                        self.rooms_collection.update_one({'_id': room['_id']}, {'$set': room}, upsert=True)
+                    logger.info("rooms.polling.success", message="Fetched rooms online data", data={"count": len(data.get('results', []))})
+                else:
+                    logger.error("rooms.api.error", message="Received non-200 response", data={"status_code": response.status_code})
+            except Exception as exc:
+                logger.exception("rooms.polling.error", message="Failed to fetch rooms online data", exc=exc)
+            if self._stop_event.wait(300):
+                break
+
+    def run(self):
+        logger.info("dbhandler.start", message="Starting database handler")
+        logger.debug("thread.processor.start", message="Starting event processor thread")
+        processor_thread = threading.Thread(target=self.event_processor, daemon=True)
         processor_thread.start()
+
+        logger.debug("thread.stats.start", message="Starting stats polling thread")
+        stats_thread = threading.Thread(target=self.stats_polling, daemon=True)
+        stats_thread.start()
+
+        rooms_thread = None
+        if self.rooms_api_url:
+            logger.debug("thread.rooms.start", message="Starting rooms online polling thread")
+            rooms_thread = threading.Thread(target=self.rooms_online_polling, daemon=True)
+            rooms_thread.start()
 
         try:
             self.long_polling()
         except KeyboardInterrupt:
-            logger.info("dbhandler.shutdown",
-                       message="Keyboard interrupt detected, cleaning up")
+            logger.info("dbhandler.shutdown", message="Keyboard interrupt detected, cleaning up")
+        finally:
             self._stop_event.set()
             processor_thread.join()
-            logger.info("dbhandler.shutdown.complete",
-                       message="Cleanup complete")
+            stats_thread.join()
+            if rooms_thread:
+                rooms_thread.join()
+            logger.info("dbhandler.shutdown.complete", message="Cleanup complete")
 
     def stop(self):
         self._stop_event.set()

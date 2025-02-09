@@ -1,17 +1,18 @@
+import asyncio
 import datetime
 import json
 import logging
 import os
 import socket
 import threading
-import asyncio
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
-from utils import MongoJSONEncoder
+from utils.jsonencoders import MongoJSONEncoder
+
 
 class StructuredLogFormatter(logging.Formatter):
     """Custom formatter for structured JSON logging."""
-    
+
     def __init__(self):
         super().__init__()
         self.hostname = socket.gethostname()
@@ -68,15 +69,15 @@ class StructuredLogFormatter(logging.Formatter):
 
 class StructuredLogger:
     """Wrapper for standardized structured logging across the application."""
-    
+
     def __init__(self, logger: Union[str, logging.Logger]):
         """Initialize with either a logger name or logger instance."""
         if isinstance(logger, str):
             self._logger = logging.getLogger(logger)
         else:
             self._logger = logger
-            
-    def _log(self, level: int, event_type: str, 
+
+    def _log(self, level: int, event_type: str,
              message: str = None,
              data: Dict[str, Any] = None,
              error: Dict[str, Any] = None,
@@ -87,13 +88,13 @@ class StructuredLogger:
             "data": data or {},
             **extra
         }
-        
+
         if message:
             log_entry["message"] = message
-            
+
         if error:
             log_entry["error"] = error
-            
+
         self._logger.log(level, log_entry)
 
     def debug(self, event_type: str, message: str = None, **kwargs) -> None:
@@ -115,7 +116,7 @@ class StructuredLogger:
     def critical(self, event_type: str, message: str = None, **kwargs) -> None:
         """Log a critical message with structured data."""
         self._log(logging.CRITICAL, event_type, message, **kwargs)
-        
+
     def exception(self, event_type: str, exc: Exception, message: str = None, **kwargs) -> None:
         """Log an exception with structured data."""
         error = {
@@ -131,7 +132,7 @@ def get_structured_logger(name: str) -> StructuredLogger:
 async def cleanup_logging():
     """Cleanup function to properly close async logging handlers."""
     root_logger = logging.getLogger()
-    
+
     # Close all handlers
     for handler in root_logger.handlers[:]:
         try:
@@ -143,6 +144,6 @@ async def cleanup_logging():
             root_logger.removeHandler(handler)
         except Exception as e:
             print(f"Error closing handler {handler}: {e}")
-    
+
     # Small delay to allow final logs to be processed
-    await asyncio.sleep(0.1) 
+    await asyncio.sleep(0.1)

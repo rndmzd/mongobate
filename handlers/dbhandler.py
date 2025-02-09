@@ -2,16 +2,12 @@ import datetime
 import queue
 import threading
 import time
-import json
-import traceback
+import urllib.parse
 
 import requests
-from requests.exceptions import RequestException
-
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-
-import urllib.parse
+from requests.exceptions import RequestException
 
 from utils.structured_logging import get_structured_logger
 
@@ -22,15 +18,15 @@ def connect_to_database(mongo_connection_uri, mongo_db, mongo_collection):
     """
     Establish a connection to MongoDB and return the collection object
     for storing events.
-    
+
     Args:
         mongo_connection_uri (str): MongoDB connection URI.
         mongo_db (str): The database name.
         mongo_collection (str): The collection name.
-    
+
     Returns:
         A pymongo Collection object.
-        
+
     Raises:
         ConnectionFailure: When unable to connect to MongoDB.
     """
@@ -41,7 +37,7 @@ def connect_to_database(mongo_connection_uri, mongo_db, mongo_collection):
         client.admin.command("ping")
     except ConnectionFailure as e:
         raise ConnectionFailure(f"Could not connect to MongoDB: {e}")
-    
+
     # Return the specific collection you'd like to use for storing events.
     return client[mongo_db][mongo_collection]
 
@@ -175,7 +171,7 @@ class DBHandler:
                             "event_type": event.get('method'),
                             "event_id": str(event.get('_id', ''))
                         })
-                        
+
             result = self.event_collection.insert_one(event)
             logger.info("event.archive.success",
                        message="Archived event",
@@ -183,7 +179,7 @@ class DBHandler:
                            "document_id": str(result.inserted_id),
                            "event_type": event.get('method')
                        })
-                        
+
         except Exception as exc:
             logger.exception("event.archive.error",
                            message="Failed to archive event",
@@ -304,7 +300,7 @@ if __name__ == "__main__":
     import configparser
     config = configparser.ConfigParser()
     config.read("config.ini")
-    
+
     events_api_url = config.get("Events API", "url")
     requests_per_minute = config.getint(
         "Events API", "max_requests_per_minute")

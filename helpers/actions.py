@@ -1,14 +1,13 @@
+import base64
 from datetime import datetime as DateTime
 from typing import Dict, List, Optional
 
 import requests
-import base64
 
 from chatdj.chatdj import SongRequest
-
-
+from helpers.checks import \
+    Checks  # Import the Checks class instead of individual method
 from utils.structured_logging import get_structured_logger
-from helpers.checks import Checks  # Import the Checks class instead of individual method
 
 logger = get_structured_logger('mongobate.helpers.actions')
 
@@ -55,8 +54,8 @@ class Actions(HTTPRequestHandler):
                  couch_buzzer: bool = False,
                  obs_integration: bool = False,
                  event_audio: bool = False):
-        
-        logger.info("actions.init", 
+
+        logger.info("actions.init",
                    message="Initializing actions",
                    data={
                        "components": {
@@ -70,8 +69,8 @@ class Actions(HTTPRequestHandler):
                            "event_audio": event_audio
                        }
                    })
-        
-        from . import config, Checks
+
+        from . import Checks, config
 
         self.config = config
         self.checks = Checks()  # Create an instance of Checks
@@ -88,18 +87,19 @@ class Actions(HTTPRequestHandler):
 
         if self.chatdj_enabled:
             logger.debug("actions.chatdj.init", message="Initializing ChatDJ")
-            from chatdj import SongExtractor, AutoDJ
-            from . import spotify_client, song_cache_collection
+            from chatdj import AutoDJ, SongExtractor
+
+            from . import song_cache_collection, spotify_client
 
             self.song_extractor = SongExtractor(
-                config.get("OpenAI", "api_key"), 
+                config.get("OpenAI", "api_key"),
                 spotify_client=spotify_client,
                 google_api_key=config.get("Search","google_api_key"),
                 google_cx=config.get("Search", "google_cx")
             )
             self.auto_dj = AutoDJ(spotify_client)
             self.song_cache_collection = song_cache_collection
-        
+
 
         if self.custom_actions_enabled:
             from . import user_collection
@@ -109,7 +109,7 @@ class Actions(HTTPRequestHandler):
             self.spray_bottle_url = config.get("General", "spray_bottle_url")
             logger.debug("actions.spray.init",
                         data={"url": self.spray_bottle_url})
-        
+
         if self.couch_buzzer_enabled:
             self.couch_buzzer_url = config.get("General", "couch_buzzer_url")
             self.couch_buzzer_username = config.get("General", "couch_buzzer_username")
@@ -127,7 +127,7 @@ class Actions(HTTPRequestHandler):
             )
             # Don't connect here - let the first actual OBS operation handle connection
             logger.info("actions.obs.init.complete", message="OBS handler initialized")
-            
+
             if self.chatdj_enabled:
                 self.request_overlay_duration = config.getint("General", "request_overlay_duration")
 
@@ -202,14 +202,14 @@ class Actions(HTTPRequestHandler):
             logger.warning("chatdj.disabled",
                          message="Cannot search for song - ChatDJ is not enabled")
             return None
-        
+
         logger.debug("spotify.search.start",
                     message="Starting Spotify song search",
                     data={
                         "song": song_info.song,
                         "artist": song_info.artist
                     })
-        
+
         search_result = self.auto_dj.search_track_uri(song_info.song, song_info.artist)
         if search_result:
             logger.debug("spotify.search.success",
@@ -240,10 +240,10 @@ class Actions(HTTPRequestHandler):
             logger.debug("spotify.market.check.start",
                         message="Checking market availability",
                         data={"uri": song_uri})
-            
+
             user_market = self.auto_dj.get_user_market()
             song_markets = self.auto_dj.get_song_markets(song_uri)
-            
+
             is_available = user_market in song_markets
             logger.debug("spotify.market.check.complete",
                         message="Market availability check complete",
@@ -254,7 +254,7 @@ class Actions(HTTPRequestHandler):
                             "is_available": is_available
                         })
             return is_available
-            
+
         except Exception as exc:
             logger.exception("spotify.market.error",
                            message="Failed to check market availability",
@@ -279,7 +279,7 @@ class Actions(HTTPRequestHandler):
                         "requester": requester_name,
                         "song": song_details
                     })
-        
+
         try:
             queue_result = self.auto_dj.add_song_to_queue(uri)
             if queue_result:
@@ -289,7 +289,7 @@ class Actions(HTTPRequestHandler):
                                "uri": uri,
                                "song": song_details
                            })
-                           
+
                 logger.debug("spotify.queue.overlay.start",
                            message="Triggering song requester overlay",
                            data={
@@ -297,14 +297,14 @@ class Actions(HTTPRequestHandler):
                                "song": song_details,
                                "duration": self.request_overlay_duration
                            })
-                           
+
                 self.trigger_song_requester_overlay(
                     requester_name,
                     song_details,
                     self.request_overlay_duration if self.request_overlay_duration else 10
                 )
                 return True
-                
+
             logger.error("spotify.queue.add.failed",
                         message="Failed to add song to queue",
                         data={
@@ -312,7 +312,7 @@ class Actions(HTTPRequestHandler):
                             "song": song_details
                         })
             return False
-            
+
         except Exception as exc:
             logger.exception("spotify.queue.error",
                            message="Failed to add song to queue",
@@ -343,21 +343,21 @@ class Actions(HTTPRequestHandler):
                 logger.error("spotify.playback.skip.failed",
                            message="Failed to skip current song")
             return skip_result
-            
+
         except Exception as exc:
             logger.exception("spotify.playback.error",
                            message="Failed to skip song",
                            exc=exc,
                            data={"error_type": type(exc).__name__})
             return False
-    
+
     def trigger_spray(self) -> bool:
         """Trigger the spray bottle action."""
         logger.info("spray.trigger",
                    message="Triggering spray bottle",
                    data={"url": self.spray_bottle_url})
         return self.make_request(self.spray_bottle_url, {"sprayAction": True})
-    
+
     def trigger_couch_buzzer(self, duration=1) -> bool:
         """Trigger the couch buzzer action."""
         logger.info("buzzer.trigger",
@@ -366,7 +366,7 @@ class Actions(HTTPRequestHandler):
                        "duration": duration,
                        "url": self.couch_buzzer_url
                    })
-        
+
         credentials = f"{self.couch_buzzer_username}:{self.couch_buzzer_password}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         return self.make_request(
@@ -381,13 +381,13 @@ class Actions(HTTPRequestHandler):
                          message="Cannot connect - OBS integration is not enabled",
                          data={"component": "obs"})
             return False
-            
+
         if not hasattr(self, 'obs') or not self.obs:
             logger.error("obs.error",
                         message="OBS handler not initialized",
                         data={"component": "obs"})
             return False
-            
+
         try:
             if not self.obs._connected:
                 logger.info("obs.connect",
@@ -441,7 +441,7 @@ class Actions(HTTPRequestHandler):
                          message="OBS integration is not enabled")
             return
         self.obs.trigger_song_requester_overlay_sync(requester_name, song_details, display_duration)
-    
+
     def get_last_vip_audio_play(self, user: str) -> Optional[DateTime]:
         """Get the last VIP audio play time for a user."""
         user_data = self.user_collection.find_one({"username": user})
@@ -451,7 +451,7 @@ class Actions(HTTPRequestHandler):
                          data={"username": user})
             return None
         return user_data.get("last_vip_audio_play")
-    
+
     def set_last_vip_audio_play(self, user: str, timestamp: DateTime) -> bool:
         """Set the last VIP audio play time for a user."""
         return self.user_collection.update_one(

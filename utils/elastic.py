@@ -1,22 +1,22 @@
-import logging
-import datetime
 import asyncio
-from elasticsearch import AsyncElasticsearch
-from elasticsearch.exceptions import ApiError, ConnectionError, TransportError
-from elasticsearch.transport import AsyncTransport
-import socket
-import json
-from typing import Optional
 import atexit
-import threading
-from queue import Queue
-import signal
-import backoff
-import warnings
-import aiohttp
-import sys
+import datetime
+import json
+import logging
+import socket
 import ssl
+import sys
+import threading
+import warnings
+from queue import Queue
+from typing import Optional
+
+import aiohttp
+import backoff
 from bson import ObjectId
+from elasticsearch import AsyncElasticsearch
+from elasticsearch.exceptions import ConnectionError, TransportError
+
 
 class MongoJsonEncoder(json.JSONEncoder):
     """JSON encoder that can handle MongoDB types."""
@@ -30,11 +30,11 @@ class MongoJsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class AsyncElasticsearchHandler(logging.Handler):
-    def __init__(self, host: str, port: int, index_prefix: str = 'mongobate', 
+    def __init__(self, host: str, port: int, index_prefix: str = 'mongobate',
                  api_key: Optional[str] = None, use_ssl: bool = False,
                  retry_max_time: int = 60):
         super().__init__()
-        
+
         # Store initialization parameters
         self.host = host
         self.port = port
@@ -42,7 +42,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         self.api_key = api_key
         self.use_ssl = use_ssl
         self.retry_max_time = retry_max_time
-        
+
         self.hostname = socket.gethostname()
         self._queue = asyncio.Queue()
         self._stop_event = asyncio.Event()
@@ -56,12 +56,12 @@ class AsyncElasticsearchHandler(logging.Handler):
         self.es_client = None
         self._http_session = None
         self.json_encoder = MongoJsonEncoder()
-        
+
         # Set default formatter
         self.setFormatter(
             logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         )
-        
+
         # Register cleanup on interpreter shutdown
         atexit.register(self._sync_cleanup)
 
@@ -77,7 +77,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         """Initialize the handler and start the worker."""
         if self._initialized:
             return
-            
+
         # Get or create event loop
         try:
             self._main_loop = asyncio.get_running_loop()
@@ -91,7 +91,7 @@ class AsyncElasticsearchHandler(logging.Handler):
             enable_cleanup_closed=True
         )
         self._http_session = aiohttp.ClientSession(connector=connector)
-        
+
         await self._connect_to_elasticsearch()
 
         # Start the background worker
@@ -107,18 +107,18 @@ class AsyncElasticsearchHandler(logging.Handler):
             except Exception:
                 pass
             self.es_client = None
-            
+
         while True:
             try:
                 # Initialize Elasticsearch client
                 scheme = "https"  # Always use HTTPS since server requires it
                 hosts = [{"host": self.host, "port": self.port, "scheme": scheme}]
-                
+
                 # Create SSL context that accepts self-signed certificates
                 ssl_context = ssl.create_default_context()
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
-                
+
                 client_kwargs = {
                     'hosts': hosts,
                     'request_timeout': 30,
@@ -129,20 +129,20 @@ class AsyncElasticsearchHandler(logging.Handler):
                 }
                 if self.api_key:
                     client_kwargs['api_key'] = self.api_key
-                
+
                 self.es_client = AsyncElasticsearch(**client_kwargs)
-                
+
                 # Test the connection
                 await self.es_client.info()
                 print(f"Successfully connected to Elasticsearch at {self.host}:{self.port}")
                 self._reconnect_delay = 1  # Reset delay on successful connection
                 return
-                
+
             except Exception as e:
                 print(f"Failed to connect to Elasticsearch: {str(e)}", file=sys.stderr)
                 if self._stop_event.is_set():
                     return
-                    
+
                 # Exponential backoff with max delay of 30 seconds
                 await asyncio.sleep(min(self._reconnect_delay, 30))
                 self._reconnect_delay *= 2
@@ -152,7 +152,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         if not self.es_client:
             await self._connect_to_elasticsearch()
             return False
-            
+
         try:
             await self.es_client.info()
             return True
@@ -160,14 +160,14 @@ class AsyncElasticsearchHandler(logging.Handler):
             await self._connect_to_elasticsearch()
             return False
 
-    @backoff.on_exception(backoff.expo, 
+    @backoff.on_exception(backoff.expo,
                          (ConnectionError, TransportError),
                          max_time=60)
     async def _bulk_index(self, actions):
         """Send bulk index request with retry logic."""
         if not self.es_client:
             return
-            
+
         try:
             if not await self._ensure_connection():
                 return
@@ -250,7 +250,7 @@ class AsyncElasticsearchHandler(logging.Handler):
                 },
                 'message': record.getMessage()
             }
-            
+
             # Add exception info if present
             if record.exc_info:
                 doc['error'] = {
@@ -258,17 +258,17 @@ class AsyncElasticsearchHandler(logging.Handler):
                     'message': str(record.exc_info[1]),
                     'stack_trace': self.formatter.formatException(record.exc_info)
                 }
-            
+
             # Add structured logging fields
             if hasattr(record, 'event_type'):
                 doc['event'] = {
                     'type': record.event_type
                 }
-            
+
             # Add any additional data fields
             if hasattr(record, 'data'):
                 doc['data'] = record.data
-            
+
             # Add any extra fields from record
             if hasattr(record, 'extra_fields'):
                 for key, value in record.extra_fields.items():
@@ -281,7 +281,7 @@ class AsyncElasticsearchHandler(logging.Handler):
                         current[parts[-1]] = value
                     else:
                         doc[key] = value
-            
+
             return doc
         except Exception as e:
             print(f"Error serializing record: {str(e)}", file=sys.stderr)
@@ -292,7 +292,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         if not self._initialized:
             warnings.warn("Elasticsearch handler not initialized", RuntimeWarning)
             return
-            
+
         try:
             doc = self._serialize_record(record)
             if doc is None:
@@ -300,7 +300,7 @@ class AsyncElasticsearchHandler(logging.Handler):
 
             # Get current thread ID
             thread_id = threading.get_ident()
-            
+
             # If we're in the main thread, we can use the event loop directly
             if thread_id == threading.main_thread().ident and self._main_loop:
                 self._main_loop.call_soon_threadsafe(
@@ -312,9 +312,9 @@ class AsyncElasticsearchHandler(logging.Handler):
                     self._thread_queues[thread_id] = Queue()
                     # Start a thread-specific worker
                     self._start_thread_worker(thread_id)
-                
+
                 self._thread_queues[thread_id].put(doc)
-            
+
         except Exception as e:
             print(f"Error queueing log message: {str(e)}", file=sys.stderr)
 
@@ -322,7 +322,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         """Start a worker for a specific thread."""
         if not self._initialized or not self._main_loop:
             return
-            
+
         async def thread_worker():
             thread_queue = self._thread_queues[thread_id]
             while not self._stop_event.is_set():
@@ -345,11 +345,11 @@ class AsyncElasticsearchHandler(logging.Handler):
             self._closed = True
             self._initialized = False
             self._stop_event.set()
-            
+
             # Close Elasticsearch client if it exists
             if self.es_client:
                 self.es_client = None
-            
+
             # Clear any remaining items in queue
             while not self._queue.empty():
                 try:
@@ -361,7 +361,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         """Async close method for proper cleanup."""
         if self._closed or not self._initialized:
             return
-            
+
         try:
             await self._async_close()
         except Exception as e:
@@ -371,11 +371,11 @@ class AsyncElasticsearchHandler(logging.Handler):
         """Gracefully shut down the handler."""
         if self._closed or not self._initialized:
             return
-            
+
         self._closed = True
         self._stop_event.set()
         self._initialized = False  # Stop accepting new logs immediately
-        
+
         try:
             # Cancel worker task first
             if self._worker_task:
@@ -385,14 +385,14 @@ class AsyncElasticsearchHandler(logging.Handler):
                 except (asyncio.CancelledError, Exception):
                     pass
                 self._worker_task = None
-            
+
             # Clear any remaining items in queue
             while not self._queue.empty():
                 try:
                     self._queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-            
+
             # Close Elasticsearch client
             if self.es_client:
                 try:
@@ -401,7 +401,7 @@ class AsyncElasticsearchHandler(logging.Handler):
                     print(f"Error closing Elasticsearch client: {str(e)}", file=sys.stderr)
                 finally:
                     self.es_client = None
-            
+
             # Close HTTP session last
             if self._http_session:
                 if not self._http_session.closed:
@@ -410,7 +410,7 @@ class AsyncElasticsearchHandler(logging.Handler):
                     except Exception as e:
                         print(f"Error closing HTTP session: {str(e)}", file=sys.stderr)
                 self._http_session = None
-                    
+
         except Exception as e:
             print(f"Error during async close: {str(e)}", file=sys.stderr)
         finally:
@@ -421,7 +421,7 @@ class AsyncElasticsearchHandler(logging.Handler):
         """Process items in the queue."""
         if not self.es_client:
             return
-            
+
         batch = []
         while not self._queue.empty() and len(batch) < 100:
             try:
@@ -440,7 +440,7 @@ class AsyncElasticsearchHandler(logging.Handler):
                     {'index': {'_index': index_name}},
                     record
                 ])
-            
+
             try:
                 await self._bulk_index(actions)
             except Exception as e:
@@ -469,7 +469,7 @@ def patched_handler_close(self):
                 # If no loop exists or it's closed, create a new one
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
+
             if loop.is_running():
                 loop.create_task(self.close())
             else:
@@ -484,4 +484,4 @@ def patched_handler_close(self):
     else:
         original_handler_close(self)
 
-logging.Handler.close = patched_handler_close 
+logging.Handler.close = patched_handler_close

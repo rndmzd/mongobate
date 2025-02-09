@@ -1,14 +1,11 @@
-from typing import List, Dict, Optional
-import logging
-from typing import List, Optional
-import sys
-import time
 import json
 import re
+import time
+from typing import List, Optional
 
 import openai
-from pydantic import BaseModel
 import requests
+from pydantic import BaseModel
 from spotipy import Spotify, SpotifyException
 
 from utils.structured_logging import get_structured_logger
@@ -26,17 +23,17 @@ class SongRequest(BaseModel):
 class SongExtractor:
     """
     Extracts song and artist information from a message.
-    
+
     If a Spotify URI is found and a spotify_client is provided, it uses the Spotify API.
     Otherwise, it uses the ChatGPT completions API to extract song requests.
     If an extracted song request has no artist, it uses a hybrid approach (Google Custom Search + ChatGPT)
     to look up the artist name.
     """
     def __init__(
-        self, 
-        openai_api_key: str, 
-        spotify_client: Optional[object] = None, 
-        google_api_key: Optional[str] = None, 
+        self,
+        openai_api_key: str,
+        spotify_client: Optional[object] = None,
+        google_api_key: Optional[str] = None,
         google_cx: Optional[str] = None
     ):
         # Set up the OpenAI API key.
@@ -174,7 +171,7 @@ class SongExtractor:
                                    "song": song_request.song,
                                    "found_artist": song_request.artist
                                })
-            
+
             logger.debug("song.extract.complete",
                         message="Song extraction complete",
                         data={"final_songs": [s.dict() for s in songs]})
@@ -197,7 +194,7 @@ class SongExtractor:
         logger.debug("artist.lookup.start",
                     message="Starting hybrid artist lookup",
                     data={"song": song_name})
-                    
+
         snippet = self.lookup_artist_by_song_via_google(song_name)
         if snippet:
             logger.debug("artist.lookup.google.success",
@@ -237,7 +234,7 @@ class SongExtractor:
             logger.error("artist.lookup.google.config",
                         message="Google API key or custom search engine ID (CX) not provided")
             return ""
-            
+
         query = f"Who is the song '{song_name}' by?"
         endpoint = "https://www.googleapis.com/customsearch/v1"
         params = {
@@ -245,19 +242,19 @@ class SongExtractor:
             "cx": self.google_cx,
             "q": query,
         }
-        
+
         logger.debug("artist.lookup.google.request",
                     message="Sending Google search request",
                     data={
                         "song": song_name,
                         "query": query
                     })
-                    
+
         try:
             response = requests.get(endpoint, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
-            
+
             # Use the first item's snippet if available.
             if "items" in data and data["items"]:
                 snippet = data["items"][0].get("snippet", "")
@@ -269,12 +266,12 @@ class SongExtractor:
                                "total_results": len(data["items"])
                            })
                 return snippet
-                
+
             logger.warning("artist.lookup.google.empty",
                          message="No search results found",
                          data={"song": song_name})
             return ""
-            
+
         except Exception as exc:
             logger.exception("artist.lookup.google.error",
                            message="Error during Google search",
@@ -308,14 +305,14 @@ class SongExtractor:
                 )
             }
         ]
-        
+
         logger.debug("artist.lookup.chat.request",
                     message="Sending artist extraction request to ChatGPT",
                     data={
                         "song": song_name,
                         "snippet": snippet
                     })
-                    
+
         try:
             response = openai.chat.completions.create(
                 model="gpt-4o",
@@ -323,10 +320,10 @@ class SongExtractor:
                 temperature=0
             )
             content = response.choices[0].message.content.strip()
-            
+
             # Assume the artist's name is on the first line.
             artist_name = content.splitlines()[0].strip()
-            
+
             logger.debug("artist.lookup.chat.response",
                         message="Received artist extraction response",
                         data={
@@ -335,7 +332,7 @@ class SongExtractor:
                             "raw_response": content
                         })
             return artist_name
-            
+
         except Exception as exc:
             logger.exception("artist.lookup.chat.error",
                            message="Error during artist extraction",
@@ -354,7 +351,7 @@ class AutoDJ:
         self.spotify = spotify
         logger.debug("Prompting user for playback device selection.")
         self.playback_device = self._select_playback_device()
-        
+
         logger.debug("spotify.playback.init", message="Initializing playback state")
         self.playing_first_track = False
 
@@ -364,7 +361,6 @@ class AutoDJ:
 
     def _print_variables(self, return_value=None):
         """Stub function for logging internal state."""
-        pass
 
     def _select_playback_device(self) -> str:
         try:
@@ -450,7 +446,7 @@ class AutoDJ:
                 logger.debug("spotify.queue.add",
                             message="Adding track to queue",
                             data={"track_uri": track_uri})
-            
+
             self.queued_tracks.append(track_uri)
             # Start playback if not already active.
             if not self.playback_active() and len(self.queued_tracks) == 1:
@@ -613,7 +609,7 @@ class AutoDJ:
                            })
             self.spotify.next_track(device_id=self.playback_device)
             return True
-            
+
         except SpotifyException as exc:
             if not silent:
                 logger.exception("spotify.playback.error",
@@ -623,4 +619,4 @@ class AutoDJ:
                                    "device_id": self.playback_device
                                })
             return False
-        
+

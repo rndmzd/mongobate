@@ -1,16 +1,22 @@
-import configparser
-import sys
 import asyncio
+import configparser
 import signal
+import sys
+import logging
 
-from handlers import EventHandler
+from handlers.eventhandler import EventHandler
+from utils.logging_config import cleanup_logging, setup_logging
 from utils.structured_logging import get_structured_logger
-from utils.logging_config import setup_logging, cleanup_logging
 
 sys.stdout.reconfigure(encoding='utf-8')
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+
+# Add the following global declarations after the imports
+logger = None
+event_handler = None
+shutdown_event = None
 
 async def init_logging():
     """Initialize logging system."""
@@ -23,7 +29,7 @@ async def shutdown():
         # Disable logging after cleanup to prevent new messages during shutdown
         if event_handler:
             await event_handler.stop()
-            
+
         # Now cleanup logging
         await cleanup_logging()
     except Exception as exc:
@@ -32,11 +38,11 @@ async def shutdown():
                      data={"error": str(exc)})
 
 
-def handle_exception(loop, context):
+def handle_exception(_loop, context):
     # Don't log if we're shutting down
     if not shutdown_event.is_set():
         msg = context.get("exception", context["message"])
-        logger.error("app.error", 
+        logger.error("app.error",
                     message="Caught exception in event loop",
                     data={"error": str(msg)})
 
@@ -46,16 +52,16 @@ async def main():
         global logger, event_handler, shutdown_event
         shutdown_event = asyncio.Event()  # Create this first so handle_exception can use it
         logger = await init_logging()
-        
+
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(handle_exception)
-        
+
         # For graceful shutdown
         signals = (signal.SIGTERM, signal.SIGINT)
         for s in signals:
             try:
                 loop.add_signal_handler(
-                    s, 
+                    s,
                     lambda s=s: shutdown_event.set()
                 )
             except NotImplementedError:
@@ -119,7 +125,7 @@ async def main():
 
         # Wait for shutdown signal
         await shutdown_event.wait()
-        
+
     except Exception as exc:
         if not shutdown_event.is_set():
             logger.exception("app.error", exc=exc,
@@ -134,10 +140,10 @@ async def main():
             # Small delay to allow any pending logs to complete
             await asyncio.sleep(0.1)
             if event_handler:
-
                 await event_handler.stop()
             # Cleanup logging last
             await cleanup_logging()
+            logging.shutdown()
         except Exception as exc:
             logger.error("app.error",
                          message="Error during shutdown",

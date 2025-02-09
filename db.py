@@ -1,11 +1,10 @@
 import configparser
 import sys
-import time
-
-from utils.structured_logging import get_structured_logger
 
 # Import the new DBHandler from handlers/dbhandler.py
 from handlers.dbhandler import DBHandler
+from utils.structured_logging import get_structured_logger
+from utils.logging_config import setup_basic_logging
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -16,16 +15,15 @@ config.read("config.ini")
 logger = get_structured_logger('mongobate.db')
 
 def main():
-    from utils.logging_config import setup_basic_logging
     setup_basic_logging()
 
     # Debug output to ensure config was loaded
     print("Loaded config sections:", config.sections())
-    
+
     # Retrieve Events API configuration
     events_api_url = config.get("Events API", "url")
     requests_per_minute = config.getint("Events API", "max_requests_per_minute")
-    
+
     # Retrieve MongoDB configuration
     mongo_username = config.get("MongoDB", "username")
     mongo_password = config.get("MongoDB", "password")
@@ -38,10 +36,10 @@ def main():
         mongo_collection = config.get("MongoDB", "collection")
     except configparser.NoOptionError:
         mongo_collection = config.get("MongoDB", "event_collection")
-    
+
     # Read the replica set name from configuration; use "rs0" as default.
     replica_set = config.get("MongoDB", "replica_set", fallback="rs0")
-    
+
     logger.info("dbhandler.init",
                 message="Initializing database handler",
                 data={
@@ -70,7 +68,7 @@ def main():
         requests_per_minute=requests_per_minute,
         replica_set=replica_set
     )
-    
+
     try:
         print("Running DBHandler. Press Ctrl+C to stop...")
         db_handler.run()

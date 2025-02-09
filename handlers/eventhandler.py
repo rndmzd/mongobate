@@ -1,11 +1,10 @@
 import queue
 import threading
 import time
+import urllib.parse
 
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-
-import urllib.parse
 
 from utils.structured_logging import get_structured_logger
 
@@ -28,9 +27,9 @@ class EventHandler:
         action_refresh_interval=300,
         aws_key=None,
         aws_secret=None):
-        
+
         logger.info("handler.init", message="Initializing event handler")
-        
+
         from helpers.cbevents import CBEvents
 
         self.event_queue = queue.Queue()
@@ -83,7 +82,7 @@ class EventHandler:
                 )
             else:
                 self.user_collection = None
-                
+
             logger.info("mongodb.connect.success",
                        message="Connected to MongoDB",
                        data={
@@ -93,7 +92,7 @@ class EventHandler:
                                "users": user_collection if user_collection else None
                            }
                        })
-                       
+
         except ConnectionFailure as exc:
             logger.exception("mongodb.connect.error", exc=exc,
                            message="Failed to connect to MongoDB")
@@ -108,12 +107,12 @@ class EventHandler:
             self.vip_users = {}
             self.vip_refresh_interval = vip_refresh_interval
             self.load_vip_users()
-        
+
         if 'command_parser' in self.cb_events.active_components:
             self.admin_users = {}
             self.admin_refresh_interval = admin_refresh_interval
             self.load_admin_users()
-        
+
         if 'custom_actions' in self.cb_events.active_components:
             self.action_users = {}
             self.action_refresh_interval = action_refresh_interval
@@ -123,35 +122,35 @@ class EventHandler:
         try:
             vip_users = self.user_collection.find({'vip': True, 'active': True})
             self.vip_users.clear()
-            
+
             for user in vip_users:
                 logger.debug("users.vip.load",
                            message="Loading VIP user",
                            data={"user": user})
                 self.vip_users[user['username']] = user['audio_file']
-                
+
             logger.info("users.vip.loaded",
                        message="Loaded VIP users",
                        data={"count": len(self.vip_users)})
-                       
+
         except Exception as exc:
             logger.exception("users.vip.error", exc=exc,
                            message="Failed to load VIP users")
-    
+
     def load_admin_users(self):
         try:
             admin_users = self.user_collection.find({'admin': True, 'active': True})
             self.admin_users.clear()
-            
+
             for user in admin_users:
                 logger.debug("users.admin.load",
                            data={"user": user})
                 self.admin_users[user['username']] = True
-                
+
             logger.info("users.admin.loaded",
                        message="Loaded admin users",
                        data={"count": len(self.admin_users)})
-                       
+
         except Exception as exc:
             logger.exception("users.admin.error", exc=exc,
                            message="Failed to load admin users")
@@ -160,16 +159,16 @@ class EventHandler:
         try:
             action_users = self.user_collection.find({'action': True, 'active': True})
             self.action_users.clear()
-            
+
             for user in action_users:
                 logger.debug("users.action.load",
                            data={"user": user})
                 self.action_users[user['username']] = user['custom']
-                
+
             logger.info("users.action.loaded",
                        message="Loaded action users",
                        data={"count": len(self.action_users)})
-                       
+
         except Exception as exc:
             logger.exception("users.action.error", exc=exc,
                            message="Failed to load action users")
@@ -178,22 +177,22 @@ class EventHandler:
         last_load_vip = time.time()
         last_load_admin = time.time()
         last_load_action = time.time()
-        
+
         while not self._stop_event.is_set():
             current_time = time.time()
-            
+
             if current_time - last_load_vip > self.vip_refresh_interval:
                 logger.debug("users.vip.refresh",
                            message="Refreshing VIP users")
                 self.load_vip_users()
                 last_load_vip = current_time
-                
+
             if current_time - last_load_admin > self.admin_refresh_interval:
                 logger.debug("users.admin.refresh",
                            message="Refreshing admin users")
                 self.load_admin_users()
                 last_load_admin = current_time
-                
+
             if current_time - last_load_action > self.action_refresh_interval:
                 logger.debug("users.action.refresh",
                            message="Refreshing action users")
@@ -223,23 +222,23 @@ class EventHandler:
         while not self._stop_event.is_set():
             try:
                 event = self.event_queue.get(timeout=1)  # Timeout to check for stop signal
-                
+
                 logger.debug("event.process",
                            message="Processing event",
                            data={"event": event})
-                
+
                 privileged_users = {
                     "vip": self.vip_users,
                     "admin": self.admin_users,
                     "custom_actions": self.action_users
                 }
-                
+
                 process_result = self.cb_events.process_event(event, privileged_users)
                 logger.debug("event.process.result",
                            data={"success": process_result})
-                           
+
                 self.event_queue.task_done()
-                
+
             except queue.Empty:
                 continue  # Resume loop if no event and check for stop signal
             except Exception as exc:
@@ -250,20 +249,20 @@ class EventHandler:
         try:
             logger.info("mongodb.watch.start",
                        message="Starting change stream watch")
-                       
+
             with self.event_collection.watch(max_await_time_ms=1000) as stream:
                 while not self._stop_event.is_set():
                     change = stream.try_next()
                     if change is None:
                         continue
-                        
+
                     if change["operationType"] == "insert":
                         doc = change["fullDocument"]
                         logger.debug("mongodb.watch.event",
                                    message="New event detected",
                                    data={"document": doc})
                         self.event_queue.put(doc)
-                        
+
         except Exception as exc:
             logger.exception("mongodb.watch.error", exc=exc,
                            message="Failed to watch for changes")
@@ -274,7 +273,7 @@ class EventHandler:
     def run(self):
         logger.info("handler.start",
                    message="Starting event handler threads")
-        
+
         logger.debug("thread.watch.start",
                     message="Starting change stream watcher thread")
         self.watcher_thread = threading.Thread(
@@ -308,17 +307,17 @@ class EventHandler:
         """Stop the event handler and cleanup resources."""
         # Set stop event first to signal all threads to stop
         self._stop_event.set()
-        
+
         # Stop all threads
         threads = [
             self.watcher_thread,
             self.event_thread,
             self.privileged_user_refresh_thread
         ]
-        
+
         if hasattr(self, 'song_queue_check_thread'):
             threads.append(self.song_queue_check_thread)
-        
+
         # Then stop each thread with a timeout
         for thread in threads:
             if thread and thread.is_alive():

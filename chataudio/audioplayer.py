@@ -1,5 +1,5 @@
 import sys
-from threading import Thread, Event
+from threading import Event, Thread
 
 import pygame
 import pygame._sdl2.audio as sdl2_audio
@@ -49,7 +49,7 @@ class AudioPlayer:
             logger.info("audio.device.abort",
                        message="User aborted device selection")
             sys.exit()
-            
+
         logger.debug("audio.device.select",
                     message="User selected audio device",
                     data={
@@ -70,7 +70,7 @@ class AudioPlayer:
                           message="Set output device",
                           data={"device": device_name})
                 return True
-                
+
         logger.warning("audio.device.error",
                       message="Device not found, using default",
                       data={"requested_device": device_name})
@@ -85,7 +85,7 @@ class AudioPlayer:
         self.stop_event.clear()
         self.play_thread = Thread(target=self._play_audio_thread, args=(file_path,))
         self.play_thread.start()
-        
+
         logger.info("audio.playback.start",
                    message="Started audio playback",
                    data={"file": file_path})

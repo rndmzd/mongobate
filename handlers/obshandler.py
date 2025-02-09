@@ -1,8 +1,9 @@
 import asyncio
-import simpleobsws
-from typing import Optional, Dict, Any
-import yaml
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import simpleobsws
+import yaml
 
 from utils.structured_logging import get_structured_logger
 
@@ -11,7 +12,7 @@ logger = get_structured_logger('mongobate.handlers.obshandler')
 class OBSHandler:
     def __init__(self, host: str = 'localhost', port: int = 4455, password: Optional[str] = None):
         """Initialize OBS WebSocket handler.
-        
+
         Args:
             host: OBS WebSocket server host
             port: OBS WebSocket server port
@@ -22,7 +23,7 @@ class OBSHandler:
         self.password = password
         self.ws: Optional[simpleobsws.WebSocketClient] = None
         self._connected = False
-        
+
         # Get the current event loop or create a new one
         try:
             self.loop = asyncio.get_event_loop()
@@ -35,7 +36,7 @@ class OBSHandler:
             logger.debug("obs.init.loop",
                         message="Created new event loop",
                         data={"loop_type": "new"})
-        
+
         # Load scene definitions
         self.scenes = self._load_scenes()
         if self.scenes:
@@ -87,27 +88,27 @@ class OBSHandler:
                            "host": self.host,
                            "port": self.port
                        })
-            
+
             ws_params = simpleobsws.IdentificationParameters(ignoreNonFatalRequestChecks=False)
             self.ws = simpleobsws.WebSocketClient(
                 url=ws_url,
                 password=self.password,
                 identification_parameters=ws_params
             )
-            
+
             try:
                 logger.info("obs.connect.step", message="Initiating WebSocket connection")
                 await self.ws.connect()
                 logger.info("obs.connect.step", message="WebSocket connected, waiting for identification")
                 await self.ws.wait_until_identified()
                 logger.info("obs.connect.step", message="WebSocket identified successfully")
-                
+
                 self._connected = True
                 logger.info("obs.connect.success",
                            message="Connected to OBS WebSocket",
                            data={"url": ws_url})
                 return True
-                
+
             except asyncio.TimeoutError:
                 logger.error("obs.connect.timeout",
                            message="Connection attempt timed out",
@@ -126,7 +127,7 @@ class OBSHandler:
                            data={"error": str(exc), "url": ws_url})
                 self._connected = False
                 return False
-            
+
         except Exception as exc:
             logger.exception("obs.connect.error",
                            exc=exc,
@@ -151,17 +152,17 @@ class OBSHandler:
 
     async def send_request(self, request_type: str, request_data: Optional[Dict] = None, max_retries: int = 2) -> Optional[Dict[str, Any]]:
         """Send a request to OBS WebSocket server with retry logic.
-        
+
         Args:
             request_type: Type of request to send
             request_data: Data to send with request
             max_retries: Maximum number of retry attempts (default: 2)
-            
+
         Returns:
             Response from OBS WebSocket server or None if request failed
         """
         retries = 0
-        
+
         while retries <= max_retries:
             try:
                 if not self.ws or not self._connected:
@@ -180,10 +181,10 @@ class OBSHandler:
                                    message="Not connected and max retries exceeded",
                                    data={"request_type": request_type})
                         return None
-                
+
                 request = simpleobsws.Request(request_type, request_data)
                 response = await self.ws.call(request)
-                
+
                 if response and response.ok():
                     logger.debug("obs.request.success",
                                message="Request successful",
@@ -205,7 +206,7 @@ class OBSHandler:
                         await asyncio.sleep(1)  # Wait before retry
                         continue
                     return None
-                    
+
             except simpleobsws.NotIdentifiedError:
                 logger.warning("obs.connection.lost",
                              message="Lost connection to OBS WebSocket")
@@ -233,33 +234,33 @@ class OBSHandler:
                     await asyncio.sleep(1)  # Wait before retry
                     continue
                 return None
-        
+
         return None
 
     # Convenience methods for common OBS operations
     async def set_scene(self, scene_key: str) -> bool:
         """Switch to the specified scene.
-        
+
         Args:
             scene_key: Key of the scene in the YAML config
-            
+
         Returns:
             True if successful, False otherwise
         """
         scene_name = self._get_scene_name(scene_key)
         if not scene_name:
             return False
-            
+
         logger.debug("obs.scene.set",
                     message="Setting current scene",
                     data={
                         "scene_key": scene_key,
                         "scene_name": scene_name
                     })
-            
+
         response = await self.send_request('SetCurrentProgramScene', {'sceneName': scene_name})
         success = response is not None
-        
+
         if success:
             logger.info("obs.scene.set.success",
                        message="Set current scene",
@@ -268,12 +269,12 @@ class OBSHandler:
             logger.error("obs.scene.set.error",
                         message="Failed to set scene",
                         data={"scene_name": scene_name})
-            
+
         return success
 
     async def get_current_scene(self) -> Optional[str]:
         """Get the name of the current scene.
-        
+
         Returns:
             Name of current scene or None if request failed
         """
@@ -288,19 +289,19 @@ class OBSHandler:
 
     async def set_source_visibility(self, scene_key: str, source_name: str, visible: bool) -> bool:
         """Set the visibility of a source in a scene.
-        
+
         Args:
             scene_key: Key of the scene in the YAML config
             source_name: Name of source to modify
             visible: Whether source should be visible
-            
+
         Returns:
             True if successful, False otherwise
         """
         scene_name = self._get_scene_name(scene_key)
         if not scene_name:
             return False
-            
+
         logger.debug("obs.source.visibility",
                     message="Setting source visibility",
                     data={
@@ -308,22 +309,22 @@ class OBSHandler:
                         "source": source_name,
                         "visible": visible
                     })
-            
+
         # First get the scene item ID
         id_response = await self.send_request('GetSceneItemId', {
             'sceneName': scene_name,
             'sourceName': source_name
         })
-        
+
         # GetSceneItemId must return a valid ID
         if not id_response or 'sceneItemId' not in id_response:
             logger.error("obs.source.error",
                         message="Failed to get scene item ID",
                         data={"source": source_name})
             return False
-            
+
         scene_item_id = id_response['sceneItemId']
-            
+
         # Then set the visibility using the ID
         try:
             # For SetSceneItemEnabled, any non-error response (including None) means success
@@ -332,7 +333,7 @@ class OBSHandler:
                 'sceneItemId': scene_item_id,
                 'sceneItemEnabled': visible
             })
-            
+
             # If we got here, the request succeeded (no exception was raised)
             logger.info("obs.source.visibility.success",
                        message="Set source visibility",
@@ -342,7 +343,7 @@ class OBSHandler:
                            "visible": visible
                        })
             return True
-            
+
         except Exception as exc:
             logger.exception("obs.source.visibility.error",
                            message="Failed to set source visibility",
@@ -357,50 +358,50 @@ class OBSHandler:
 
     async def get_source_visibility(self, scene_key: str, source_name: str) -> Optional[bool]:
         """Get the visibility state of a source in a scene.
-        
+
         Args:
             scene_key: Key of the scene in the YAML config
             source_name: Name of source to check
-            
+
         Returns:
             True if source is visible, False if hidden, None if request failed
         """
         scene_name = self._get_scene_name(scene_key)
         if not scene_name:
             return None
-            
+
         logger.debug("obs.source.get",
                     message="Getting source visibility",
                     data={
                         "scene": scene_name,
                         "source": source_name
                     })
-            
+
         # First get the scene item ID
         id_response = await self.send_request('GetSceneItemId', {
             'sceneName': scene_name,
             'sourceName': source_name
         })
-        
+
         if not id_response:
             logger.error("obs.source.error",
                         message="Failed to get scene item ID",
                         data={"source": source_name})
             return None
-            
+
         scene_item_id = id_response.get('sceneItemId')
         if scene_item_id is None:
             logger.error("obs.source.notfound",
                         message="Scene item ID not found",
                         data={"source": source_name})
             return None
-            
+
         # Then get the visibility using the ID
         response = await self.send_request('GetSceneItemEnabled', {
             'sceneName': scene_name,
             'sceneItemId': scene_item_id
         })
-        
+
         if response is not None:
             visible = response.get('sceneItemEnabled', False)
             logger.debug("obs.source.visibility.get",
@@ -411,16 +412,16 @@ class OBSHandler:
                             "visible": visible
                         })
             return visible
-            
+
         return None
 
     async def show_song_requester(self, requester_name: str, song_details: str) -> bool:
         """Show the song requester overlay with specified details.
-        
+
         Args:
             requester_name: Name of the person requesting the song
             song_details: Details of the requested song
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -431,7 +432,7 @@ class OBSHandler:
                             "requester": requester_name,
                             "song": song_details
                         })
-            
+
             request_content = {
                 'inputName': 'SongRequester',
                 'inputSettings': {
@@ -441,7 +442,7 @@ class OBSHandler:
             logger.debug("obs.overlay.show.request",
                         message="Sending request to set input settings",
                         data={"request": request_content})
-                        
+
             try:
                 # SetInputSettings returns None on success
                 await self.send_request('SetInputSettings', request_content)
@@ -457,7 +458,7 @@ class OBSHandler:
                 logger.info("obs.overlay.show.success",
                            message="Song requester overlay shown")
                 return True
-                
+
             logger.error("obs.overlay.show.error",
                         message="Failed to show song requester overlay",
                         data={
@@ -465,7 +466,7 @@ class OBSHandler:
                             "visibility_success": visibility_success
                         })
             return False
-            
+
         except Exception as exc:
             logger.exception("obs.overlay.show.error",
                            message="Failed to show song requester overlay",
@@ -477,16 +478,16 @@ class OBSHandler:
 
     async def hide_song_requester(self) -> bool:
         """Hide the song requester overlay.
-        
+
         Returns:
             True if successful, False otherwise
         """
         try:
             logger.debug("obs.overlay.hide",
                         message="Hiding song requester overlay")
-            
+
             visibility_success = await self.set_source_visibility('main', 'SongRequester', False)
-            
+
             if visibility_success:
                 logger.info("obs.overlay.hide.success",
                            message="Song requester overlay hidden")
@@ -494,9 +495,9 @@ class OBSHandler:
                 logger.error("obs.overlay.hide.error",
                            message="Failed to hide song requester overlay",
                            data={"visibility_success": visibility_success})
-            
+
             await asyncio.sleep(1)
-            
+
             request_content = {
                 'inputName': 'SongRequester',
                 'inputSettings': {
@@ -506,16 +507,16 @@ class OBSHandler:
             logger.debug("obs.overlay.hide.request",
                         message="Sending request to set input settings",
                         data={"request": request_content})
-                        
+
             try:
                 # SetInputSettings returns None on success
                 await self.send_request('SetInputSettings', request_content)
                 text_success = True
             except Exception:
                 text_success = False
-            
+
             return visibility_success and text_success
-            
+
         except Exception as exc:
             logger.exception("obs.overlay.hide.error",
                            message="Failed to hide song requester overlay",
@@ -527,7 +528,7 @@ class OBSHandler:
 
     async def trigger_song_requester_overlay(self, requester_name: str, song_details: str, display_duration: int = 10) -> None:
         """Show the song requester overlay for a specified duration.
-        
+
         Args:
             requester_name: Name of the person requesting the song
             song_details: Details of the requested song
@@ -540,7 +541,7 @@ class OBSHandler:
                         "song": song_details,
                         "duration": display_duration
                     })
-                    
+
         await self.show_song_requester(requester_name, song_details)
         await asyncio.sleep(display_duration)
         await self.hide_song_requester()
@@ -559,10 +560,10 @@ class OBSHandler:
 
     def run_sync(self, coro):
         """Run a coroutine synchronously using the dedicated event loop.
-        
+
         Args:
             coro: Coroutine to run
-            
+
         Returns:
             Result of the coroutine or None if it failed
         """
@@ -571,7 +572,7 @@ class OBSHandler:
             if self.loop.is_running():
                 logger.debug("obs.sync.run",
                            message="Using run_coroutine_threadsafe")
-                           
+
                 # For trigger_song_requester_overlay, use a longer timeout
                 # that accounts for display duration
                 timeout = 30  # Default timeout
@@ -579,19 +580,19 @@ class OBSHandler:
                     coro_name = coro.get_name()
                 else:
                     coro_name = coro.__name__
-                    
+
                 if 'trigger_song_requester_overlay' in coro_name:
                     # Add 5 seconds to display_duration for setup/cleanup
                     display_duration = coro.cr_frame.f_locals.get('display_duration', 10)
                     timeout = display_duration + 5
-                    
+
                 logger.debug("obs.sync.timeout",
                            message="Setting coroutine timeout",
                            data={
                                "coroutine": coro_name,
                                "timeout": timeout
                            })
-                           
+
                 future = asyncio.run_coroutine_threadsafe(coro, self.loop)
                 return future.result(timeout=timeout)
             else:
@@ -599,7 +600,7 @@ class OBSHandler:
                 logger.debug("obs.sync.run",
                            message="Using run_until_complete")
                 return self.loop.run_until_complete(coro)
-                
+
         except asyncio.TimeoutError as exc:
             logger.error("obs.sync.timeout",
                         message="Coroutine timed out",

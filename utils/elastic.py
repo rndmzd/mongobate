@@ -248,7 +248,13 @@ class AsyncElasticsearchHandler(logging.Handler):
                     'name': self.hostname,
                     'architecture': sys.platform
                 },
-                'message': record.getMessage()
+                'message': (lambda msg: msg if isinstance(msg, dict) else (
+                    (lambda m: m if isinstance(m, dict) else {"text": m})(
+                        (lambda s: (
+                            (json.loads(s) if isinstance(json.loads(s), dict) else s)
+                        ))(record.getMessage())
+                    )
+                ))(record.msg)
             }
 
             # Add exception info if present
@@ -267,7 +273,13 @@ class AsyncElasticsearchHandler(logging.Handler):
 
             # Add any additional data fields
             if hasattr(record, 'data'):
-                doc['data'] = record.data
+                doc['data'] = (lambda d: d if isinstance(d, dict) else (
+                    (lambda x: x if isinstance(x, dict) else {"value": x})(
+                        (lambda s: (
+                            (json.loads(s) if isinstance(json.loads(s), dict) else s)
+                        ))(record.data)
+                    )
+                ))(record.data)
 
             # Add any extra fields from record
             if hasattr(record, 'extra_fields'):

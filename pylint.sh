@@ -12,5 +12,8 @@ FILES=(
     "utils"
 )
 
-# Run pylint with the selected files/directories.
-pylint --pylintrc .pylintrc --verbose --jobs 0 "${FILES[@]}"
+# Run pylint using the specified .pylintrc file.
+# The output (both stdout and stderr) is redirected to pylint_results.txt.
+pylint --rcfile=.pylintrc "${FILES[@]}" > pylint_results.txt
+
+echo "Pylint results have been saved to pylint_results.txt"

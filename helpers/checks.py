@@ -12,7 +12,7 @@ class Checks:
         self.skip_song_cost = self.config.getint("General", "skip_song_cost")
         self.command_symbol = self.config.get("General", "command_symbol")
         self.spray_bottle_cost = self.config.getint("General", "spray_bottle_cost")
-        
+
         logger.debug("checks.init",
                     message="Initialized checks",
                     data={
@@ -21,7 +21,7 @@ class Checks:
                         "command_symbol": self.command_symbol,
                         "spray_bottle_cost": self.spray_bottle_cost
                     })
-    
+
     def get_active_components(self):
         active_components = []
         for component in [comp for comp in self.config['Components']]:
@@ -34,12 +34,12 @@ class Checks:
                         })
             if component_val:
                 active_components.append(component)
-                
+
         logger.info("checks.components",
                    message="Retrieved active components",
                    data={"active_components": active_components})
         return active_components
-    
+
     def is_skip_song_request(self, tip_amount):
         is_skip = tip_amount % self.skip_song_cost == 0
         logger.debug("checks.skip_song",
@@ -61,7 +61,7 @@ class Checks:
                         "is_request": is_request
                     })
         return is_request
-    
+
     def get_request_count(self, tip_amount):
         count = tip_amount // self.song_cost
         logger.debug("checks.request_count",
@@ -72,7 +72,7 @@ class Checks:
                         "request_count": count
                     })
         return count
-    
+
     def get_command(self, message):
         if self.command_symbol in message:
             command_elements = message.split(self.command_symbol)[1].split(" ")
@@ -87,12 +87,12 @@ class Checks:
                             "args": command["args"]
                         })
             return command
-            
+
         logger.debug("checks.command.none",
                     message="No command found in message",
                     data={"message": message})
         return None
-    
+
     def is_spray_bottle_tip(self, tip_amount):
         is_spray = tip_amount == self.spray_bottle_cost
         logger.debug("checks.spray_bottle",

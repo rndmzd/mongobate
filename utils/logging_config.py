@@ -1,16 +1,16 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
-from pathlib import Path
-import json
 import datetime
+import json
+import logging
+import os
 import socket
 import traceback
-import asyncio
+from logging.handlers import RotatingFileHandler
+
 from bson import ObjectId
 
-from utils.elastic import AsyncElasticsearchHandler
 from utils.config import ConfigManager
+from utils.elastic import AsyncElasticsearchHandler
+
 
 class MongoAwareJSONEncoder(json.JSONEncoder):
     """JSON encoder that can handle MongoDB types and OpenAI objects."""
@@ -31,7 +31,7 @@ class MongoAwareJSONEncoder(json.JSONEncoder):
 
 class JSONFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging"""
-    
+
     def __init__(self):
         super().__init__()
         self.hostname = socket.gethostname()
@@ -80,32 +80,32 @@ def setup_basic_logging(logger_name='mongobate', component=None):
     """
     Set up basic logging configuration without Elasticsearch.
     This is safe to use at module level initialization.
-    
+
     Args:
         logger_name: Base name for the logger
         component: Optional component name to append to logger name
     """
     config = ConfigManager()
-    
+
     # Set up root logger first
     root_logger = logging.getLogger(logger_name)
     if not root_logger.handlers:  # Only set up root logger once
         root_logger.setLevel(logging.DEBUG)
-        
+
         # Create JSON formatter
         json_formatter = JSONFormatter()
-        
+
         # Add console handler with JSON formatting
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(json_formatter)
         root_logger.addHandler(stream_handler)
-        
+
         # Add file handler with JSON formatting
         log_file = config.get("Logging", "log_file")
         log_dir = os.path.dirname(log_file)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-            
+
         file_handler = RotatingFileHandler(
             log_file,
             maxBytes=config.getint("Logging", "log_max_size_mb") * 1024 * 1024,
@@ -114,30 +114,30 @@ def setup_basic_logging(logger_name='mongobate', component=None):
         )
         file_handler.setFormatter(json_formatter)
         root_logger.addHandler(file_handler)
-    
+
     # Create component logger if needed
     if component:
         logger = logging.getLogger(f"{logger_name}.{component}")
         logger.setLevel(logging.DEBUG)
         # Don't add handlers to component loggers, let them propagate to root
         return logger
-    
+
     return root_logger
 
 async def setup_logging(logger_name='mongobate', component=None):
     """
     Set up full logging configuration including Elasticsearch.
     Must be called from an async context.
-    
+
     Args:
         logger_name: Base name for the logger
         component: Optional component name to append to logger name
     """
     # First set up basic logging
     logger = setup_basic_logging(logger_name, component)
-    
+
     config = ConfigManager()
-    
+
     # Add Elasticsearch handler if enabled - only to root logger
     if config.getboolean("Logging", "elasticsearch_enabled", fallback=False):
         root_logger = logging.getLogger(logger_name)
@@ -148,7 +148,7 @@ async def setup_logging(logger_name='mongobate', component=None):
             es_index = config.get("Elasticsearch", "index_prefix")
             es_use_ssl = config.getboolean("Elasticsearch", "use_ssl")
             es_api_key = config.get("Elasticsearch", "api_key", fallback=None)
-            
+
             # Create and add Elasticsearch handler
             es_handler = AsyncElasticsearchHandler(
                 host=es_host,
@@ -158,14 +158,14 @@ async def setup_logging(logger_name='mongobate', component=None):
                 use_ssl=es_use_ssl
             )
             es_handler.setFormatter(JSONFormatter())
-            
+
             # Initialize the handler
             await es_handler.initialize()
-            
+
             # Only add ES handler to root logger
             if es_handler not in root_logger.handlers:
                 root_logger.addHandler(es_handler)
-            
+
             logger.info({
                 "event_type": "elasticsearch.init",
                 "message": "Elasticsearch logging enabled with API key authentication"
@@ -179,17 +179,17 @@ async def setup_logging(logger_name='mongobate', component=None):
                     "message": str(e)
                 }
             })
-    
+
     return logger
 
 async def cleanup_logging():
     """Cleanup function to properly close async logging handlers."""
     try:
         root_logger = logging.getLogger()
-        
+
         # Disable all logging first
         logging.disable(logging.CRITICAL)
-        
+
         # Close all handlers
         for handler in root_logger.handlers[:]:
             try:
@@ -200,9 +200,9 @@ async def cleanup_logging():
                 root_logger.removeHandler(handler)
             except Exception as exc:
                 print(f"Error handling logger {handler}: {exc}")
-        
+
     except Exception as exc:
         print(f"Critical error during logging cleanup: {exc}")
     finally:
         # Re-enable logging
-        logging.disable(logging.NOTSET) 
+        logging.disable(logging.NOTSET)

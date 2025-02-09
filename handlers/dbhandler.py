@@ -2,6 +2,8 @@ import datetime
 import queue
 import threading
 import time
+import json
+import traceback
 
 import requests
 from requests.exceptions import RequestException
@@ -16,6 +18,34 @@ from utils.structured_logging import get_structured_logger
 logger = get_structured_logger('mongobate.handlers.dbhandler')
 
 
+def connect_to_database(mongo_connection_uri, mongo_db, mongo_collection):
+    """
+    Establish a connection to MongoDB and return the collection object
+    for storing events.
+    
+    Args:
+        mongo_connection_uri (str): MongoDB connection URI.
+        mongo_db (str): The database name.
+        mongo_collection (str): The collection name.
+    
+    Returns:
+        A pymongo Collection object.
+        
+    Raises:
+        ConnectionFailure: When unable to connect to MongoDB.
+    """
+    try:
+        # Create the MongoClient with a short timeout for connection.
+        client = MongoClient(mongo_connection_uri, serverSelectionTimeoutMS=5000)
+        # Force connection on a request as the connect=True parameter is deprecated.
+        client.admin.command("ping")
+    except ConnectionFailure as e:
+        raise ConnectionFailure(f"Could not connect to MongoDB: {e}")
+    
+    # Return the specific collection you'd like to use for storing events.
+    return client[mongo_db][mongo_collection]
+
+
 class DBHandler:
     def __init__(
             self,
@@ -27,6 +57,7 @@ class DBHandler:
             mongo_collection,
             events_api_url,
             requests_per_minute=1000,
+            replica_set="rs0",
             aws_key=None,
             aws_secret=None):
         self.mongo_username = mongo_username
@@ -42,6 +73,8 @@ class DBHandler:
         self._stop_event = threading.Event()
 
         self.mongo_client = None
+
+        self.mongo_replica_set = replica_set
 
         self.mongo_connection_uri = None
         if aws_key and aws_secret:
@@ -60,6 +93,12 @@ class DBHandler:
                 f"?authMechanism=MONGODB-AWS&authSource=$external"
             )
 
+        self.max_db_retry_attempts = 5  # Maximum attempts to connect to the database
+        self.db_retry_backoff = 1  # initial backoff in seconds for DB connection retries
+
+        # Attempt to connect to the database with retry logic
+        self.connect_with_retry()
+
     def _sanitize_uri(self, uri):
         # Remove sensitive information from the URI
         parts = uri.split('@')
@@ -68,42 +107,46 @@ class DBHandler:
             return f"mongodb://<credentials>@{sanitized_uri}"
         return uri
 
+    def connect_with_retry(self):
+        """Try to connect to the database with a retry strategy."""
+        attempts = 0
+        backoff = self.db_retry_backoff
+        while attempts < self.max_db_retry_attempts:
+            try:
+                self.connect_to_mongodb()
+                return
+            except Exception as exc:
+                attempts += 1
+                logger.exception("database.connect.error",
+                                 exc=exc,
+                                 message=f"Failed to connect to database, attempt {attempts}/{self.max_db_retry_attempts}")
+                time.sleep(backoff)
+                backoff *= 2  # Exponential backoff
+        logger.error("database.connect.fatal",
+                     message="Exceeded maximum database reconnect attempts. Exiting.")
+        raise Exception("Fatal error: Could not connect to database after retries.")
+
     def connect_to_mongodb(self):
         try:
             if self.mongo_connection_uri:
-                sanitized_uri = self._sanitize_uri(self.mongo_connection_uri)
-                logger.debug("mongodb.connect.aws",
-                           message="Connecting with AWS credentials",
-                           data={"uri": sanitized_uri})
-                self.mongo_client = MongoClient(self.mongo_connection_uri)
+                # When using AWS-based connection, append query parameters.
+                uri = f"{self.mongo_connection_uri}&replicaSet={self.mongo_replica_set}&directConnection=true"
             else:
-                logger.debug("mongodb.connect.standard",
-                           message="Connecting with username/password",
-                           data={
-                               "host": self.mongo_host,
-                               "port": self.mongo_port
-                           })
-                self.mongo_client = MongoClient(
-                    host=self.mongo_host,
-                    port=self.mongo_port,
-                    username=self.mongo_username,
-                    password=self.mongo_password,
-                    directConnection=True)
-
-            self.mongo_db = self.mongo_client[self.mongo_db]
-            self.event_collection = self.mongo_db[self.mongo_collection]
-            
-            logger.info("mongodb.connect.success",
-                       message="Connected to MongoDB",
-                       data={
-                           "database": self.mongo_db.name,
-                           "collection": self.mongo_collection
-                       })
-                       
-        except ConnectionFailure as exc:
-            logger.exception("mongodb.connect.error",
-                           exc=exc,
-                           message="Failed to connect to MongoDB")
+                # Construct the standard MongoDB URI with authentication source.
+                uri = (
+                    f"mongodb://{self.mongo_username}:{self.mongo_password}@"
+                    f"{self.mongo_host}:{self.mongo_port}/{self.mongo_db}"
+                    f"?authSource=admin&replicaSet={self.mongo_replica_set}&directConnection=true"
+                )
+            logger.debug("connecting.uri", message="Connecting with MongoDB", data={"uri": self._sanitize_uri(uri)})
+            self.mongo_client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+            # Force a connection to check for errors.
+            self.mongo_client.admin.command("ping")
+            # Do not overwrite self.mongo_db: store the actual Database object in a new attribute.
+            self.db = self.mongo_client[self.mongo_db]
+            self.event_collection = self.db[self.mongo_collection]
+        except ConnectionFailure as e:
+            logger.exception("database.connection.failure", exc=e, message=f"Could not connect to MongoDB: {e}")
             raise
 
     def archive_event(self, event):
@@ -159,40 +202,16 @@ class DBHandler:
 
         while not self._stop_event.is_set():
             try:
-                logger.debug("api.poll",
-                           message="Polling events API",
-                           data={
-                               "url": url_next,
-                               "interval": self.interval
-                           })
-                           
                 response = requests.get(url_next)
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info("api.poll.success",
-                              message="Retrieved events from API",
-                              data={
-                                  "event_count": len(data["events"]),
-                                  "next_url": data["nextUrl"],
-                                  "status_code": response.status_code
-                              })
-                              
                     for event in data["events"]:
                         self.event_queue.put(event)
-                    url_next = data["nextUrl"]
+                    url_next = data.get("nextUrl", url_next)
                 else:
-                    logger.error("api.poll.error",
-                               message="Failed to retrieve events",
-                               data={
-                                   "status_code": response.status_code,
-                                   "url": url_next
-                               })
-                               
-            except RequestException as exc:
-                logger.exception("api.poll.error",
-                               message="Failed to poll events API",
-                               exc=exc,
-                               data={"url": url_next})
+                    logger.error("api.response.error", message="Received non-200 status code", data={"status_code": response.status_code})
+            except RequestException as e:
+                logger.error("api.request.failed", message="Request failed", data={"error": str(e)})
 
             time.sleep(self.interval)
 
@@ -200,8 +219,6 @@ class DBHandler:
         logger.info("dbhandler.start",
                    message="Starting database handler")
                    
-        self.connect_to_mongodb()
-
         logger.debug("thread.processor.start",
                     message="Starting event processor thread")
         processor_thread = threading.Thread(
@@ -253,13 +270,10 @@ if __name__ == "__main__":
         events_api_url=events_api_url,
         requests_per_minute=requests_per_minute
     )
-    db_handler.run()
-
-    print("Running DBHandler. Press Ctrl+C to stop...")
 
     try:
-        while True:
-            time.sleep(1)
+        print("Running DBHandler. Press Ctrl+C to stop...")
+        db_handler.run()
     except KeyboardInterrupt:
         logger.info("dbhandler.shutdown",
                    message="Keyboard interrupt received")

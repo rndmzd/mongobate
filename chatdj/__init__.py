@@ -1,9 +1,8 @@
-#from chatdj.autodj import AutoDJ
-#from chatdj.songextractor import SongExtractor
-from chatdj.chatdj import AutoDJ, SongExtractor
-
+from .chatdj import SongExtractor
 import configparser
 from pathlib import Path
+from .chatdj import AutoDJ
+
 
 config_path = Path(__file__).parent.parent / 'config.ini'
 

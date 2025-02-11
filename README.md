@@ -2,6 +2,32 @@
 
 A Python-based application for managing chat interactions, music playback, and event handling with MongoDB integration. This project provides a flexible framework for handling various chat-based events, managing music queues, and triggering custom actions.
 
+## Recent Changes
+
+### Logging Improvements
+
+- Added structured logging throughout the application
+- Enhanced debug logging for better troubleshooting
+- Improved error context in log messages
+- Added detailed logging for song requests and OBS operations
+- Standardized log event types and message formats
+
+### OBS Integration Improvements
+
+- Fixed OBS WebSocket connection handling
+- Removed redundant connection attempts at startup
+- Improved timeout handling for OBS operations
+- Better error handling for OBS WebSocket operations
+- Dynamic timeouts for overlay operations based on display duration
+
+### Song Request Enhancements
+
+- Better handling of song requests without artist names
+- Improved artist lookup using Google Search and ChatGPT
+- Enhanced validation of song request messages
+- Better feedback for failed song requests
+- Structured logging for song request process
+
 ## Features
 
 ### Core Components
@@ -42,6 +68,7 @@ A Python-based application for managing chat interactions, music playback, and e
 
 - Python 3.x
 - MongoDB
+- Elasticsearch (optional, for advanced logging)
 - Spotify Developer Account (for music features)
 - OpenAI API Key (for song extraction)
 
@@ -148,6 +175,68 @@ Use the configured command symbol (default: !) to trigger commands:
 - `!BRB`: Switch to BRB scene
 - `!LIVE`: Switch to main scene
 
+### Logging System
+
+The application uses a comprehensive logging system with multiple outputs:
+
+#### File Logging
+
+- Rotating file logs with configurable size and backup count
+- Separate log files for different components
+- Automatic log directory creation
+- UTF-8 encoding support
+
+#### Console Logging
+
+- Real-time console output
+- Formatted messages with timestamp, component name, and log level
+- Color-coded log levels (when supported)
+
+#### Elasticsearch Integration
+
+- Asynchronous logging to Elasticsearch
+- Daily indices with automatic rotation (format: mongobate-YYYY.MM.DD)
+- Bulk indexing for improved performance
+- Secure authentication using API keys
+- Detailed log documents including:
+  - Timestamp
+  - Host information
+  - Log level
+  - Component name
+  - File path and line number
+  - Function name
+  - Exception details (when applicable)
+  - Custom fields support
+
+#### Configuration
+
+```ini
+[Logging]
+log_file = logs/debug.log
+log_file_db = logs/db.log
+log_file_app = logs/app.log
+log_max_size_mb = 10
+log_backup_count = 10
+elasticsearch_enabled = true
+
+[Elasticsearch]
+host = your-elasticsearch-host
+port = 9200
+index_prefix = mongobate
+use_ssl = false
+api_key = your-api-key-here
+```
+
+#### Features
+
+- Centralized logging configuration
+- Component-specific loggers
+- Asynchronous Elasticsearch logging with batching
+- Graceful shutdown and cleanup
+- Error handling and automatic reconnection
+- Queue-based logging to prevent blocking
+- Support for structured logging with extra fields
+
 ## Development
 
 ### Project Structure
@@ -168,4 +257,44 @@ mongobate/
 ├── chataudio/          # Audio handling
 │   └── audioplayer.py  # Audio playback
 └── utils/              # Utility functions
+    ├── config.py       # Configuration management
+    ├── elastic.py      # Elasticsearch logging handler
+    ├── logging_config.py # Centralized logging configuration
+    └── jsonencoders.py # JSON encoding utilities
 ```
+
+## Troubleshooting
+
+### OBS Connection Issues
+
+- Ensure OBS is running before starting the application
+- Verify WebSocket server is enabled in OBS
+- Check OBS WebSocket password in config.ini
+- Monitor logs for connection issues
+
+### Song Request Issues
+
+- Verify Spotify credentials are correct
+- Ensure OpenAI API key is valid
+- Check Google API configuration for artist lookups
+- Monitor logs for request processing issues
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Known Issues
+
+- When starting playback of first song to be added to queue, an error may occur but doesn't affect functionality
+
+## TODO
+
+- Add private message alert system
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

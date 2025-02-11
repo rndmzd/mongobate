@@ -1,6 +1,7 @@
-from bson import ObjectId
-import simplejson as json
 from datetime import datetime
+
+import simplejson as json
+from bson import ObjectId
 
 
 class MongoJSONEncoder(json.JSONEncoder):

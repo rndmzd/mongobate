@@ -123,7 +123,14 @@ class CBEvents:
 
             # Extract tip amount once for all checks
             tip_amount = event.get('tip', {}).get('tokens', 0)
+            logger.debug("event.tip.amount",
+                         message="Tip amount",
+                         data={"tip_amount": tip_amount})
             tip_message = event.get('tip', {}).get('message', '').strip()
+            logger.debug("event.tip.message",
+                         message="Tip message",
+                         data={"tip_message": tip_message})
+
 
             if 'chat_auto_dj' in self.active_components:
                 logger.debug("event.tip.song.check",
@@ -151,13 +158,20 @@ class CBEvents:
                 if self.checks.is_song_request(tip_amount):
                     # Validate message length
                     if len(tip_message) < 3:
-                        logger.warning("event.tip.song.request.invalid",
-                                     message="Message too short for song request",
+                        logger.warning("event.tip.song.request.short",
+                                     message="Message short and will be padded for song request",
                                      data={
                                          "message": tip_message,
                                          "length": len(tip_message)
                                      })
-                        return True
+                        padded_message = f"The song name is \"{tip_message}\". I don't know the artist."
+                        logger.info("event.tip.song.request.padded",
+                                   message="Message padded for song request",
+                                   data={
+                                       "original_message": tip_message,
+                                       "padded_message": padded_message
+                                   })
+                        tip_message = padded_message                    
 
                     logger.info("event.tip.song.request.detected",
                               message="Song request detected",
@@ -629,7 +643,7 @@ class CBEvents:
             logger.info("event.chat.message", message="Chat message event received")
             username = event['user']['username']
 
-            if username in admin_users:
+            if username in admin_users['admin_users']:
                 logger.info("event.chat.admin",
                           message="Admin message received",
                           data={
@@ -647,32 +661,34 @@ class CBEvents:
                     logger.debug("event.command.result",
                                data={"result": command_result})
 
-            elif username in action_users.keys():
-                logger.info("event.chat.action",
-                          message="Action user message received",
-                          data={"username": username})
-
-                # Process action user messages
-                if self._matches_action_message(event['message']['message'], username):
-                    logger.info("event.action.trigger",
-                              message="Action message matched",
+            if 'custom_actions' in self.active_components:
+                username = event['user']['username']
+                if username in action_users.keys():
+                    logger.info("event.chat.action.message",
+                              message="Received message from action user",
                               data={"username": username})
-
-                    audio_file = action_users[username]
-                    logger.debug("event.action.audio",
-                               data={"audio_file": audio_file})
-
-                    audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                    logger.debug("event.action.audio",
-                               data={"audio_file_path": audio_file_path})
-
-                    logger.info("event.action.audio.play",
-                              message="Playing action audio",
-                              data={
-                                  "username": username,
-                                  "audio_file": audio_file
-                              })
-                    self.audio_player.play_audio(audio_file_path)
+                    logger.info(f"Message from action user {username}.")
+                    action_messages = action_users[username]
+                    message = event['message']['message'].strip()
+                    for action_message in action_messages.keys():
+                        if action_message in message:
+                            logger.info("event.action.trigger",
+                                      message="Action message matched",
+                                      data={"username": username})
+                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            audio_file = action_messages[message]
+                            logger.debug("event.action.audio",
+                                       data={"audio_file": audio_file})
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug("event.action.audio",
+                                       data={"audio_file_path": audio_file_path})
+                            logger.info("event.action.audio.play",
+                                      message="Playing action audio",
+                                      data={
+                                          "username": username,
+                                          "audio_file": audio_file
+                                      })
+                            self.audio_player.play_audio(audio_file_path)
 
             return True
         except Exception as e:

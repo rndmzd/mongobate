@@ -124,7 +124,7 @@ class SongExtractor:
                            message="Sending request to ChatGPT",
                            data={"messages": messages_payload})
                 response = openai.chat.completions.create(
-                    model="o3-mini",
+                    model="gpt-4o",
                     messages=messages_payload,
                     temperature=0
                 )
@@ -315,7 +315,7 @@ class SongExtractor:
 
         try:
             response = openai.chat.completions.create(
-                model="o3-mini",
+                model="gpt-4o",
                 messages=messages_payload,
                 temperature=0
             )

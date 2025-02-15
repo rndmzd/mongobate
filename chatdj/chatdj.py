@@ -478,6 +478,11 @@ class AutoDJ:
                     return True
                 self._print_variables(False)
 
+                if len(self.queued_tracks) == 0 and not self.playing_first_track:
+                    logger.info("queue.check.empty",
+                                message="Queue is now empty")
+                    self.playing_first_track = True
+
                 return False
 
             if self.queued_tracks:
@@ -485,10 +490,17 @@ class AutoDJ:
                 logger.debug(f"Current playing track: {current_track}")
                 if current_track == self.queued_tracks[0]:
                     logger.info(f"Now playing queued track: {current_track}")
-                    self.queued_tracks.pop(0)
+                    popped_track = self.queued_tracks.pop(0)
+                    logger.debug("queue.check.popped",
+                                message=f"Popped track: {popped_track}")
             self._print_variables(True)
             return True
         except SpotifyException as exc:
+            logger.exception("queue.check.error",
+                            message="Failed to check queue status",
+                            exc=exc)
+            return False
+        except Exception as exc:
             logger.exception("queue.check.error",
                             message="Failed to check queue status",
                             exc=exc)

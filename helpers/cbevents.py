@@ -191,17 +191,36 @@ class CBEvents:
                     )
 
                     if not song_extracts:
-                        logger.warning("event.tip.song.request.empty",
-                                     message="No songs could be extracted from message",
-                                     data={
-                                         "message": tip_message,
-                                         "tip_amount": tip_amount
-                                     })
-                        return True
+                        # Provide a fallback if the message isn't empty
+                        if tip_message:
+                            from chatdj.chatdj import SongRequest
+                            fallback_song = SongRequest(song=tip_message, artist="Unknown", spotify_uri=None)
+                            song_extracts = [fallback_song]
+                            logger.warning("event.tip.song.request.fallback",
+                                           message="No songs could be extracted from message. Using fallback guess.",
+                                           data={
+                                               "message": tip_message,
+                                               "tip_amount": tip_amount
+                                           })
+                        else:
+                            logger.warning("event.tip.song.request.empty",
+                                           message="No songs could be extracted from empty message",
+                                           data={
+                                               "message": tip_message,
+                                               "tip_amount": tip_amount
+                                           })
+                            # NEW: Display a note overlay to say no song was identified
+                            if self.actions.chatdj_enabled:  # only if ChatDJ is enabled
+                                self.actions.trigger_song_requester_overlay(
+                                    event["user"]["username"],
+                                    "No song found. Possibly due to blank note or blocked words (like 'kid','child').",
+                                    10
+                                )
+                            return True
 
                     logger.debug("event.tip.song.request.extracts",
                                message="Extracted song information",
-                               data={"extracts": [s.dict() for s in song_extracts]})
+                               data={"extracts": [s.model_dump() for s in song_extracts]})
 
                     songs_processed = 0
                     for song_info in song_extracts:

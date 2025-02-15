@@ -232,11 +232,13 @@ class EventHandler:
                            message="Processing event",
                            data={"event": event})
 
-                privileged_users = {
-                    "vip": self.vip_users,
-                    "admin": self.admin_users,
-                    "custom_actions": self.action_users
-                }
+                privileged_users = {}
+                if "vip_audio" in self.cb_events.active_components and self.vip_users is not None:
+                    privileged_users["vip"] = self.vip_users
+                if "command_parser" in self.cb_events.active_components and self.admin_users is not None:
+                    privileged_users["admin"] = self.admin_users
+                if "custom_actions" in self.cb_events.active_components and self.action_users is not None:
+                    privileged_users["custom_actions"] = self.action_users
 
                 process_result = self.cb_events.process_event(event, privileged_users)
                 logger.debug("event.process.result",

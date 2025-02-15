@@ -398,10 +398,12 @@ class CBEvents:
         """
         try:
             # Process private message event
-            logger.info("Private message event received.")
+            logger.info("event.private.message", message="Private message event received.")
+
+            username = event['user']['username']
 
             if 'command_parser' in self.active_components:
-                if event["user"]["username"] in admin_users:
+                if username in admin_users.keys():
                     logger.info("event.chat.admin",
                               message="Admin message received",
                               data={
@@ -418,7 +420,6 @@ class CBEvents:
                                    data={"result": command_result})
 
             if 'custom_actions' in self.active_components:
-                username = event['user']['username']
                 if username in action_users.keys():
                     logger.info("event.chat.action.message",
                               message="Received message from action user",
@@ -641,28 +642,27 @@ class CBEvents:
         try:
             # Process chat message event
             logger.info("event.chat.message", message="Chat message event received")
+            
             username = event['user']['username']
 
-            if username in admin_users['admin_users']:
-                logger.info("event.chat.admin",
-                          message="Admin message received",
-                          data={
-                              "username": username,
-                              "message": event['message']['message']
-                          })
-
-                # Process admin commands
-                command = self.checks.get_command(event['message']['message'])
-                if command:
-                    logger.info("event.command.process",
-                              message="Processing admin command",
-                              data={"command": command})
-                    command_result = self.commands.try_command(command)
-                    logger.debug("event.command.result",
-                               data={"result": command_result})
+            if 'command_parser' in self.active_components:
+                if username in admin_users.keys():
+                    logger.info("event.chat.admin",
+                              message="Admin message received",
+                              data={
+                                  "username": event["user"]["username"],
+                                  "message": event['message']['message']
+                              })
+                    command = self.checks.get_command(event["message"]["message"])
+                    if command:
+                        logger.info("event.command.process",
+                                  message="Processing admin command",
+                                  data={"command": command})
+                        command_result = self.commands.try_command(command)
+                        logger.debug("event.command.result",
+                                   data={"result": command_result})
 
             if 'custom_actions' in self.active_components:
-                username = event['user']['username']
                 if username in action_users.keys():
                     logger.info("event.chat.action.message",
                               message="Received message from action user",
@@ -689,10 +689,9 @@ class CBEvents:
                                           "audio_file": audio_file
                                       })
                             self.audio_player.play_audio(audio_file_path)
-
             return True
         except Exception as e:
-            logger.exception("event.chat.message.error",
-                            message="Error processing chat message event",
+            logger.exception("event.message.private.error",
+                            message="Error processing private message event",
                             exc=e)
             return False

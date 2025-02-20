@@ -211,9 +211,9 @@ class CBEvents:
                                            })
                             # NEW: Display a note overlay to say no song was identified
                             if self.actions.chatdj_enabled:  # only if ChatDJ is enabled
-                                self.actions.trigger_song_requester_overlay(
+                                self.actions.trigger_warning_overlay(
                                     event["user"]["username"],
-                                    "No song found. Possibly due to blank note or blocked words (like 'kid','child').",
+                                    "Couldn't identify a song in your tip, because the tip note was blank. It may have been removed due to blocked words (like 'kid','child').",
                                     10
                                 )
                             return True

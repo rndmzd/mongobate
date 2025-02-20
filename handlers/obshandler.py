@@ -546,6 +546,137 @@ class OBSHandler:
         await asyncio.sleep(display_duration)
         await self.hide_song_requester()
 
+    async def show_warning_overlay(self, username: str, warning_message: str) -> bool:
+        """Show the warning overlay with specified details.
+
+        Args:
+            username: Name of the user the warning is for
+            warning_message: Warning message to display
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.debug("obs.overlay.warning.show",
+                        message="Showing warning overlay",
+                        data={
+                            "username": username,
+                            "message": warning_message
+                        })
+
+            request_content = {
+                'inputName': 'WarningOverlay',  # Make sure this matches your OBS text source name
+                'inputSettings': {
+                    'text': f'Notice for {username}:\n{warning_message}'
+                }
+            }
+            logger.debug("obs.overlay.warning.request",
+                        message="Sending request to set input settings",
+                        data={"request": request_content})
+
+            try:
+                # SetInputSettings returns None on success
+                await self.send_request('SetInputSettings', request_content)
+                text_success = True
+            except Exception:
+                text_success = False
+
+            await asyncio.sleep(1)
+
+            visibility_success = await self.set_source_visibility('main', 'WarningOverlay', True)
+
+            if text_success and visibility_success:
+                logger.info("obs.overlay.warning.success",
+                           message="Warning overlay shown")
+                return True
+
+            logger.error("obs.overlay.warning.error",
+                        message="Failed to show warning overlay",
+                        data={
+                            "text_success": text_success,
+                            "visibility_success": visibility_success
+                        })
+            return False
+
+        except Exception as exc:
+            logger.exception("obs.overlay.warning.error",
+                           message="Failed to show warning overlay",
+                           exc=exc,
+                           data={
+                               "error_type": type(exc).__name__
+                           })
+            return False
+
+    async def hide_warning_overlay(self) -> bool:
+        """Hide the warning overlay.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.debug("obs.overlay.warning.hide",
+                        message="Hiding warning overlay")
+
+            visibility_success = await self.set_source_visibility('main', 'WarningOverlay', False)
+
+            if visibility_success:
+                logger.info("obs.overlay.warning.hide.success",
+                           message="Warning overlay hidden")
+            else:
+                logger.error("obs.overlay.warning.hide.error",
+                           message="Failed to hide warning overlay",
+                           data={"visibility_success": visibility_success})
+
+            await asyncio.sleep(1)
+
+            request_content = {
+                'inputName': 'WarningOverlay',
+                'inputSettings': {
+                    'text': ''
+                }
+            }
+            logger.debug("obs.overlay.warning.hide.request",
+                        message="Sending request to clear input settings",
+                        data={"request": request_content})
+
+            try:
+                # SetInputSettings returns None on success
+                await self.send_request('SetInputSettings', request_content)
+                text_success = True
+            except Exception:
+                text_success = False
+
+            return visibility_success and text_success
+
+        except Exception as exc:
+            logger.exception("obs.overlay.warning.hide.error",
+                           message="Failed to hide warning overlay",
+                           exc=exc,
+                           data={
+                               "error_type": type(exc).__name__
+                           })
+            return False
+
+    async def trigger_warning_overlay(self, username: str, warning_message: str, display_duration: int = 10) -> None:
+        """Show the warning overlay for a specified duration.
+
+        Args:
+            username: Name of the user the warning is for
+            warning_message: Warning message to display
+            display_duration: How long to display the overlay in seconds
+        """
+        logger.debug("obs.overlay.warning.trigger",
+                    message="Triggering warning overlay",
+                    data={
+                        "username": username,
+                        "message": warning_message,
+                        "duration": display_duration
+                    })
+
+        await self.show_warning_overlay(username, warning_message)
+        await asyncio.sleep(display_duration)
+        await self.hide_warning_overlay()
+
     async def initialize(self) -> bool:
         """Initialize the OBS handler and connect to WebSocket.
         This should be called after instantiation.
@@ -648,3 +779,7 @@ class OBSHandler:
         """Trigger song requester overlay synchronously."""
         # Use display_duration + 1 second as timeout to ensure full display
         self.run_sync(self.trigger_song_requester_overlay(requester_name, song_details, display_duration))
+
+    def trigger_warning_overlay_sync(self, username: str, warning_message: str, display_duration: int = 10) -> None:
+        """Trigger warning overlay synchronously."""
+        self.run_sync(self.trigger_warning_overlay(username, warning_message, display_duration))

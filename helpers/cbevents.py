@@ -213,7 +213,7 @@ class CBEvents:
                             if self.actions.chatdj_enabled:  # only if ChatDJ is enabled
                                 self.actions.trigger_warning_overlay(
                                     event["user"]["username"],
-                                    "Couldn't identify a song in your tip, because the tip note was blank. It was likely removed due to blocked words (like 'kid','child').",
+                                    "Couldn't identify a song in your tip, because the tip note was blank. It may have been removed due to blocked words (like 'kid','child').",
                                     10
                                 )
                             return True

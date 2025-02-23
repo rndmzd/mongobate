@@ -123,7 +123,14 @@ class CBEvents:
 
             # Extract tip amount once for all checks
             tip_amount = event.get('tip', {}).get('tokens', 0)
+            logger.debug("event.tip.amount",
+                         message="Tip amount",
+                         data={"tip_amount": tip_amount})
             tip_message = event.get('tip', {}).get('message', '').strip()
+            logger.debug("event.tip.message",
+                         message="Tip message",
+                         data={"tip_message": tip_message})
+
 
             if 'chat_auto_dj' in self.active_components:
                 logger.debug("event.tip.song.check",
@@ -151,13 +158,20 @@ class CBEvents:
                 if self.checks.is_song_request(tip_amount):
                     # Validate message length
                     if len(tip_message) < 3:
-                        logger.warning("event.tip.song.request.invalid",
-                                     message="Message too short for song request",
+                        logger.warning("event.tip.song.request.short",
+                                     message="Message short and will be padded for song request",
                                      data={
                                          "message": tip_message,
                                          "length": len(tip_message)
                                      })
-                        return True
+                        padded_message = f"The song name is \"{tip_message}\". I don't know the artist."
+                        logger.info("event.tip.song.request.padded",
+                                   message="Message padded for song request",
+                                   data={
+                                       "original_message": tip_message,
+                                       "padded_message": padded_message
+                                   })
+                        tip_message = padded_message                    
 
                     logger.info("event.tip.song.request.detected",
                               message="Song request detected",
@@ -177,17 +191,36 @@ class CBEvents:
                     )
 
                     if not song_extracts:
-                        logger.warning("event.tip.song.request.empty",
-                                     message="No songs could be extracted from message",
-                                     data={
-                                         "message": tip_message,
-                                         "tip_amount": tip_amount
-                                     })
-                        return True
+                        # Provide a fallback if the message isn't empty
+                        if tip_message:
+                            from chatdj.chatdj import SongRequest
+                            fallback_song = SongRequest(song=tip_message, artist="Unknown", spotify_uri=None)
+                            song_extracts = [fallback_song]
+                            logger.warning("event.tip.song.request.fallback",
+                                           message="No songs could be extracted from message. Using fallback guess.",
+                                           data={
+                                               "message": tip_message,
+                                               "tip_amount": tip_amount
+                                           })
+                        else:
+                            logger.warning("event.tip.song.request.empty",
+                                           message="No songs could be extracted from empty message",
+                                           data={
+                                               "message": tip_message,
+                                               "tip_amount": tip_amount
+                                           })
+                            # NEW: Display a note overlay to say no song was identified
+                            if self.actions.chatdj_enabled:  # only if ChatDJ is enabled
+                                self.actions.trigger_warning_overlay(
+                                    event["user"]["username"],
+                                    "Couldn't identify a song in your tip, because the tip note was blank. It may have been removed due to blocked words (like 'kid','child').",
+                                    10
+                                )
+                            return True
 
                     logger.debug("event.tip.song.request.extracts",
                                message="Extracted song information",
-                               data={"extracts": [s.dict() for s in song_extracts]})
+                               data={"extracts": [s.model_dump() for s in song_extracts]})
 
                     songs_processed = 0
                     for song_info in song_extracts:
@@ -384,10 +417,12 @@ class CBEvents:
         """
         try:
             # Process private message event
-            logger.info("Private message event received.")
+            logger.info("event.private.message", message="Private message event received.")
+
+            username = event['user']['username']
 
             if 'command_parser' in self.active_components:
-                if event["user"]["username"] in admin_users:
+                if username in admin_users.keys():
                     logger.info("event.chat.admin",
                               message="Admin message received",
                               data={
@@ -404,7 +439,6 @@ class CBEvents:
                                    data={"result": command_result})
 
             if 'custom_actions' in self.active_components:
-                username = event['user']['username']
                 if username in action_users.keys():
                     logger.info("event.chat.action.message",
                               message="Received message from action user",
@@ -627,56 +661,56 @@ class CBEvents:
         try:
             # Process chat message event
             logger.info("event.chat.message", message="Chat message event received")
+            
             username = event['user']['username']
 
-            if username in admin_users:
-                logger.info("event.chat.admin",
-                          message="Admin message received",
-                          data={
-                              "username": username,
-                              "message": event['message']['message']
-                          })
-
-                # Process admin commands
-                command = self.checks.get_command(event['message']['message'])
-                if command:
-                    logger.info("event.command.process",
-                              message="Processing admin command",
-                              data={"command": command})
-                    command_result = self.commands.try_command(command)
-                    logger.debug("event.command.result",
-                               data={"result": command_result})
-
-            elif username in action_users.keys():
-                logger.info("event.chat.action",
-                          message="Action user message received",
-                          data={"username": username})
-
-                # Process action user messages
-                if self._matches_action_message(event['message']['message'], username):
-                    logger.info("event.action.trigger",
-                              message="Action message matched",
-                              data={"username": username})
-
-                    audio_file = action_users[username]
-                    logger.debug("event.action.audio",
-                               data={"audio_file": audio_file})
-
-                    audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
-                    logger.debug("event.action.audio",
-                               data={"audio_file_path": audio_file_path})
-
-                    logger.info("event.action.audio.play",
-                              message="Playing action audio",
+            if 'command_parser' in self.active_components:
+                if username in admin_users.keys():
+                    logger.info("event.chat.admin",
+                              message="Admin message received",
                               data={
-                                  "username": username,
-                                  "audio_file": audio_file
+                                  "username": event["user"]["username"],
+                                  "message": event['message']['message']
                               })
-                    self.audio_player.play_audio(audio_file_path)
+                    command = self.checks.get_command(event["message"]["message"])
+                    if command:
+                        logger.info("event.command.process",
+                                  message="Processing admin command",
+                                  data={"command": command})
+                        command_result = self.commands.try_command(command)
+                        logger.debug("event.command.result",
+                                   data={"result": command_result})
 
+            if 'custom_actions' in self.active_components:
+                if username in action_users.keys():
+                    logger.info("event.chat.action.message",
+                              message="Received message from action user",
+                              data={"username": username})
+                    logger.info(f"Message from action user {username}.")
+                    action_messages = action_users[username]
+                    message = event['message']['message'].strip()
+                    for action_message in action_messages.keys():
+                        if action_message in message:
+                            logger.info("event.action.trigger",
+                                      message="Action message matched",
+                                      data={"username": username})
+                            logger.info(f"Message matches action message for user {username}. Executing action.")
+                            audio_file = action_messages[message]
+                            logger.debug("event.action.audio",
+                                       data={"audio_file": audio_file})
+                            audio_file_path = f"{self.vip_audio_directory}/{audio_file}"
+                            logger.debug("event.action.audio",
+                                       data={"audio_file_path": audio_file_path})
+                            logger.info("event.action.audio.play",
+                                      message="Playing action audio",
+                                      data={
+                                          "username": username,
+                                          "audio_file": audio_file
+                                      })
+                            self.audio_player.play_audio(audio_file_path)
             return True
         except Exception as e:
-            logger.exception("event.chat.message.error",
-                            message="Error processing chat message event",
+            logger.exception("event.message.private.error",
+                            message="Error processing private message event",
                             exc=e)
             return False

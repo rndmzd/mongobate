@@ -204,16 +204,21 @@ class EventHandler:
     def song_queue_check(self):
         """Continuously check the song queue status."""
         while not self._stop_event.is_set():
-            song_queue_status = self.cb_events.actions.auto_dj.check_queue_status()
+            try:
+                song_queue_status = self.cb_events.actions.auto_dj.check_queue_status()
+            except Exception as exc:
+                logger.exception("song.queue.check.error", exc=exc, message="Error occurred during auto_dj.check_queue_status")
             time.sleep(5)
+        logger.info("song.queue.check.shutdown",
+                    message="Shutting down song queue check")
         # One final check in silent mode during shutdown
         try:
-            auto_dj = self.cb_events.actions.auto_dj
             # Check queue status silently
-            auto_dj.check_queue_status(silent=True)
+            self.cb_events.actions.auto_dj.check_queue_status(silent=True)
             # If there are any remaining tracks, clear them silently
-            if auto_dj.queued_tracks:
-                auto_dj.clear_playback_context(silent=True)
+            if self.cb_events.actions.auto_dj.queued_tracks:
+                self.cb_events.actions.auto_dj.clear_playback_context(silent=True)
+
         except Exception:
             pass  # Ignore any errors during shutdown
 
@@ -227,11 +232,13 @@ class EventHandler:
                            message="Processing event",
                            data={"event": event})
 
-                privileged_users = {
-                    "vip": self.vip_users,
-                    "admin": self.admin_users,
-                    "custom_actions": self.action_users
-                }
+                privileged_users = {}
+                if "vip_audio" in self.cb_events.active_components and self.vip_users is not None:
+                    privileged_users["vip"] = self.vip_users
+                if "command_parser" in self.cb_events.active_components and self.admin_users is not None:
+                    privileged_users["admin"] = self.admin_users
+                if "custom_actions" in self.cb_events.active_components and self.action_users is not None:
+                    privileged_users["custom_actions"] = self.action_users
 
                 process_result = self.cb_events.process_event(event, privileged_users)
                 logger.debug("event.process.result",
@@ -362,3 +369,4 @@ if __name__ == "__main__":
     finally:
         event_handler.stop()
         logger.info("Done.")
+

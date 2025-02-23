@@ -459,3 +459,17 @@ class Actions(HTTPRequestHandler):
             {"$set": {"last_vip_audio_play": timestamp}},
             upsert=True
         ).acknowledged
+
+    def trigger_warning_overlay(self, username: str, warning_message: str, display_duration: int = 10) -> None:
+        """Trigger the warning overlay to show a warning message.
+
+        Args:
+            username: Name of the user the warning is for
+            warning_message: The warning message to display
+            display_duration: How long to display the overlay in seconds
+        """
+        if not self.obs_integration_enabled:
+            logger.warning("actions.obs.disabled",
+                         message="Cannot show warning - OBS integration is not enabled")
+            return
+        self.obs.trigger_warning_overlay_sync(username, warning_message, display_duration)
